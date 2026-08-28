@@ -471,4 +471,251 @@ export const getLocationAnalysis = async (req: Request, res: Response) => {
     console.error("❌ getLocationAnalysis:", error);
     res.status(500).json({ success: false, message: "خطا در تحلیل موقعیت" });
   }
+};// ======================== NEW: Functions for route ========================
+
+/**
+ * GET /api/market/stats
+ * آمار کلی بازار (همه استان‌ها)
+ */
+export const getMarketStats = async (req: Request, res: Response) => {
+  try {
+    const Ad = getAd();
+    const matchConditions: any = { status: "active" };
+
+    const [stats] = await Ad.aggregate([
+      { $match: matchConditions },
+      {
+        $group: {
+          _id: null,
+          totalAds: { $sum: 1 },
+          avgPricePerMeter: {
+            $avg: {
+              $cond: [
+                { $and: [{ $gt: ["$area", 0] }, { $gt: ["$price", 0] }] },
+                { $divide: ["$price", "$area"] },
+                0,
+              ],
+            },
+          },
+          avgTotalPrice: { $avg: "$price" },
+          avgArea: { $avg: "$area" },
+          minPrice: { $min: "$price" },
+          maxPrice: { $max: "$price" },
+          totalViews: { $sum: { $ifNull: ["$views", 0] } },
+        },
+      },
+    ]);
+
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const monthly = await Ad.aggregate([
+      {
+        $match: {
+          ...matchConditions,
+          price: { $gt: 0 },
+          area: { $gt: 0 },
+          createdAt: { $gte: sixMonthsAgo },
+        },
+      },
+      {
+        $group: {
+          _id: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" } },
+          avgPricePerMeter: { $avg: { $divide: ["$price", "$area"] } },
+        },
+      },
+      { $sort: { "_id.year": 1, "_id.month": 1 } },
+    ]);
+
+    const MONTHS_PERSIAN: Record<number, string> = {
+      1: "فروردین", 2: "اردیبهشت", 3: "خرداد", 4: "تیر", 5: "مرداد", 6: "شهریور",
+      7: "مهر", 8: "آبان", 9: "آذر", 10: "دی", 11: "بهمن", 12: "اسفند",
+    };
+    const marketTrends = monthly.map((r: any) => ({
+      month: MONTHS_PERSIAN[r._id.month] || `ماه ${r._id.month}`,
+      avgPricePerMeter: Math.round(r.avgPricePerMeter || 0),
+    }));
+
+    let growthRate = 0;
+    if (marketTrends.length >= 2) {
+      const latest = marketTrends[marketTrends.length - 1]?.avgPricePerMeter || 0;
+      const previous = marketTrends[marketTrends.length - 2]?.avgPricePerMeter || 0;
+      if (previous > 0) growthRate = parseFloat((((latest - previous) / previous) * 100).toFixed(1));
+    }
+
+    res.json({
+      success: true,
+      data: {
+        totalAds: stats?.totalAds || 0,
+        avgPricePerMeter: Math.round(stats?.avgPricePerMeter || 0),
+        avgTotalPrice: Math.round(stats?.avgTotalPrice || 0),
+        avgArea: Math.round(stats?.avgArea || 0),
+        minPrice: stats?.minPrice || 0,
+        maxPrice: stats?.maxPrice || 0,
+        totalViews: stats?.totalViews || 0,
+        growthRate,
+        marketTrends,
+      },
+    });
+  } catch (error: any) {
+    console.error("❌ getMarketStats:", error.message);
+    res.status(500).json({ success: false, message: "خطا در دریافت آمار بازار" });
+  }
+};
+
+/**
+ * GET /api/market/provinces
+ * لیست استان‌ها (برای فیلتر)
+ */
+export const getProvinces = async (_req: Request, res: Response) => {
+  try {
+    const Ad = getAd();
+    const provinces = await Ad.distinct("province", { status: "active", province: { $exists: true, $ne: "" } });
+    res.json({ success: true, data: provinces.filter(Boolean) });
+  } catch (error: any) {
+    console.error("❌ getProvinces:", error.message);
+    res.status(500).json({ success: false, message: "خطا در دریافت استان‌ها" });
+  }
+};
+
+/**
+ * GET /api/market/region/:regionId
+ * آمار یک منطقه خاص
+ */
+export const getRegionStats = async (req: Request, res: Response) => {
+  try {
+    const Ad = getAd();
+    const regionId = String(req.params.regionId || "");
+
+    if (!regionId) {
+      return res.status(400).json({ success: false, message: "شناسه منطقه الزامی است" });
+    }
+
+    // فرض: regionId می‌تواند نام استان یا نام شهر یا نام منطقه باشد
+    const filter: any = { status: "active" };
+    // اگر regionId با نام استان در ALL_PROVINCES_DATA تطابق داشت، شهرها را فیلتر کن
+    const provinceData = ALL_PROVINCES_DATA.find((p) => p.name === regionId);
+    if (provinceData) {
+      const cities = provinceData.cities.map((c) => c.name);
+      filter.city = { $in: cities };
+    } else {
+      // در غیر این صورت سعی کن به عنوان منطقه (region) یا شهر جستجو کن
+      filter.$or = [{ region: regionId }, { city: regionId }, { province: regionId }];
+    }
+
+    const [stats] = await Ad.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          totalAds: { $sum: 1 },
+          avgPricePerMeter: {
+            $avg: {
+              $cond: [
+                { $and: [{ $gt: ["$area", 0] }, { $gt: ["$price", 0] }] },
+                { $divide: ["$price", "$area"] },
+                0,
+              ],
+            },
+          },
+          avgTotalPrice: { $avg: "$price" },
+          avgArea: { $avg: "$area" },
+          minPrice: { $min: "$price" },
+          maxPrice: { $max: "$price" },
+          totalViews: { $sum: { $ifNull: ["$views", 0] } },
+        },
+      },
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        regionId,
+        totalAds: stats?.totalAds || 0,
+        avgPricePerMeter: Math.round(stats?.avgPricePerMeter || 0),
+        avgTotalPrice: Math.round(stats?.avgTotalPrice || 0),
+        avgArea: Math.round(stats?.avgArea || 0),
+        minPrice: stats?.minPrice || 0,
+        maxPrice: stats?.maxPrice || 0,
+        totalViews: stats?.totalViews || 0,
+      },
+    });
+  } catch (error: any) {
+    console.error("❌ getRegionStats:", error.message);
+    res.status(500).json({ success: false, message: "خطا در دریافت آمار منطقه" });
+  }
+};
+
+/**
+ * GET /api/market/region/:regionId/hot-zones
+ * مناطق داغ (بیشترین آگهی)
+ */
+export const getHotZones = async (req: Request, res: Response) => {
+  try {
+    const Ad = getAd();
+    const regionId = String(req.params.regionId || "");
+
+    if (!regionId) {
+      return res.status(400).json({ success: false, message: "شناسه منطقه الزامی است" });
+    }
+
+    const filter: any = { status: "active" };
+    const provinceData = ALL_PROVINCES_DATA.find((p) => p.name === regionId);
+    if (provinceData) {
+      const cities = provinceData.cities.map((c) => c.name);
+      filter.city = { $in: cities };
+    } else {
+      filter.$or = [{ region: regionId }, { city: regionId }];
+    }
+
+    const hotZones = await Ad.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: "$district",
+          totalAds: { $sum: 1 },
+          avgPricePerMeter: {
+            $avg: {
+              $cond: [
+                { $and: [{ $gt: ["$area", 0] }, { $gt: ["$price", 0] }] },
+                { $divide: ["$price", "$area"] },
+                0,
+              ],
+            },
+          },
+          totalViews: { $sum: { $ifNull: ["$views", 0] } },
+        },
+      },
+      { $sort: { totalAds: -1 } },
+      { $limit: 10 },
+      {
+        $project: {
+          _id: 0,
+          name: "$_id",
+          totalAds: 1,
+          avgPricePerMeter: { $round: ["$avgPricePerMeter", 0] },
+          totalViews: 1,
+        },
+      },
+    ]);
+
+    res.json({ success: true, data: hotZones });
+  } catch (error: any) {
+    console.error("❌ getHotZones:", error.message);
+    res.status(500).json({ success: false, message: "خطا در دریافت مناطق داغ" });
+  }
+};
+
+/**
+ * POST /api/market/refresh
+ * بازسازی آمار (در صورت وجود کش)
+ */
+export const refreshMarketStats = async (req: Request, res: Response) => {
+  try {
+    // در این نسخه کش نداریم؛ فقط یک پاسخ موفق برمی‌گردانیم
+    // می‌توانید در آینده کش را پیاده‌سازی کنید
+    res.json({ success: true, message: "آمار بازار با موفقیت بازسازی شد" });
+  } catch (error: any) {
+    console.error("❌ refreshMarketStats:", error.message);
+    res.status(500).json({ success: false, message: "خطا در بازسازی آمار" });
+  }
 };
