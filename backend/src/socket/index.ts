@@ -8,9 +8,15 @@ let io: SocketServer;
 export const initSocket = (server: Server) => {
   io = new SocketServer(server, {
     cors: {
-      origin: process.env.FRONTEND_URL || "http://localhost:3000",
+      origin: [
+        process.env.FRONTEND_URL || "http://localhost:3000",
+        "https://tabadol-platform.vercel.app",
+      ],
       credentials: true,
     },
+    transports: ["websocket", "polling"], // پشتیبانی از هر دو
+    pingTimeout: 60000,
+    pingInterval: 25000,
   });
 
   // احراز هویت سوکت
@@ -29,12 +35,10 @@ export const initSocket = (server: Server) => {
   io.on("connection", (socket) => {
     const userId = socket.data.userId;
     if (userId) {
-      // جوین شدن کاربر به روم شخصی خودش
       socket.join(`user_${userId}`);
       console.log(`✅ User ${userId} connected (socket: ${socket.id})`);
     }
 
-    // چت و مکالمات
     socket.on("join-conversation", (conversationId: string) => {
       socket.join(`conversation_${conversationId}`);
       console.log(`User ${userId} joined conversation ${conversationId}`);
@@ -48,7 +52,6 @@ export const initSocket = (server: Server) => {
       console.log(`❌ User ${userId} disconnected`);
     });
 
-    // تایپینگ
     socket.on("typing", (conversationId: string) => {
       socket.to(`conversation_${conversationId}`).emit("user-typing", {
         userId: socket.data.userId,
@@ -66,10 +69,6 @@ export const initSocket = (server: Server) => {
 
   return io;
 };
-
-// ══════════════════════════════════════════════
-// توابع کمکی ارسال آنی (Helpers)
-// ══════════════════════════════════════════════
 
 export const sendRealTimeMessage = (
   receiverId: string,
@@ -90,7 +89,6 @@ export const sendRealTimeNotification = (userId: string, notification: any) => {
   }
 };
 
-// 🆕 تابع کمکی برای ارسال پیشرفت تزریق فله‌ای
 export const sendBulkProgress = (userId: string, data: any) => {
   if (io) {
     io.to(`user_${userId}`).emit("bulk-progress", data);
