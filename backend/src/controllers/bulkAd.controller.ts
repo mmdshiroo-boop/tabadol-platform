@@ -1,3 +1,4 @@
+// backend/src/controllers/bulkAd.controller.ts
 import { Response } from "express";
 import fs from "fs";
 import AdmZip from "adm-zip";
@@ -16,6 +17,13 @@ const adsUploadDir = path.resolve(process.cwd(), "uploads", "ads");
 const watermarkPath = path.resolve(process.cwd(), "assets", "watermark.png");
 let cachedWatermark: Buffer | null = null;
 
+// ✅ BASE_URL سراسری — جلوگیری از localhost در Production
+const PORT = process.env.PORT || 5001;
+const BASE_URL =
+  process.env.BASE_URL ||
+  process.env.RAILWAY_PUBLIC_URL ||
+  `http://localhost:${PORT}`;
+
 async function getWatermark(): Promise<Buffer> {
   if (cachedWatermark) return cachedWatermark;
   if (!fs.existsSync(watermarkPath)) throw new Error("فایل واترمارک یافت نشد");
@@ -25,7 +33,11 @@ async function getWatermark(): Promise<Buffer> {
   return cachedWatermark!;
 }
 
-async function asyncPool<T>(concurrency: number, items: T[], iteratorFn: (item: T, index: number) => Promise<any>): Promise<any[]> {
+async function asyncPool<T>(
+  concurrency: number,
+  items: T[],
+  iteratorFn: (item: T, index: number) => Promise<any>,
+): Promise<any[]> {
   const ret: Promise<any>[] = [];
   const executing: Promise<any>[] = [];
   for (const [i, item] of items.entries()) {
@@ -52,53 +64,89 @@ function downloadImageBuffer(url: string, attempt = 0): Promise<Buffer> {
     try {
       const parsed = new URL(url);
       referer = parsed.origin;
-      if (url.includes("divarcdn.com") || url.includes("divar.ir")) referer = "https://divar.ir";
-      else if (url.includes("sheypoor.com") || url.includes("cdn.sheypoor.com")) referer = "https://www.sheypoor.com";
+      if (url.includes("divarcdn.com") || url.includes("divar.ir"))
+        referer = "https://divar.ir";
+      else if (url.includes("sheypoor.com") || url.includes("cdn.sheypoor.com"))
+        referer = "https://www.sheypoor.com";
     } catch {}
     const client = url.startsWith("https") ? https : http;
-    const req = client.get(url, {
-      agent: url.startsWith("https") ? httpsAgent : httpAgent,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        Referer: referer,
-        Accept: "image/webp,image/*,*/*;q=0.8",
-        "Accept-Encoding": "identity",
+    const req = client.get(
+      url,
+      {
+        agent: url.startsWith("https") ? httpsAgent : httpAgent,
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          Referer: referer,
+          Accept: "image/webp,image/*,*/*;q=0.8",
+          "Accept-Encoding": "identity",
+        },
+        timeout: 10000,
       },
-      timeout: 10000,
-    }, (res) => {
-      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        return downloadImageBuffer(res.headers.location, attempt).then(resolve).catch(reject);
-      }
-      if (!res.statusCode || res.statusCode !== 200) {
-        if (attempt < maxRetries) {
-          setTimeout(() => downloadImageBuffer(url, attempt + 1).then(resolve).catch(reject), 500);
-        } else reject(new Error(`HTTP ${res.statusCode}`));
-        return;
-      }
-      const chunks: Buffer[] = [];
-      res.on("data", (chunk: Buffer) => chunks.push(chunk));
-      res.on("end", () => resolve(Buffer.concat(chunks)));
-      res.on("error", (err) => {
-        if (attempt < maxRetries) {
-          setTimeout(() => downloadImageBuffer(url, attempt + 1).then(resolve).catch(reject), 500);
-        } else reject(err);
-      });
-    });
+      (res) => {
+        if (
+          res.statusCode &&
+          res.statusCode >= 300 &&
+          res.statusCode < 400 &&
+          res.headers.location
+        ) {
+          return downloadImageBuffer(res.headers.location, attempt)
+            .then(resolve)
+            .catch(reject);
+        }
+        if (!res.statusCode || res.statusCode !== 200) {
+          if (attempt < maxRetries) {
+            setTimeout(
+              () =>
+                downloadImageBuffer(url, attempt + 1)
+                  .then(resolve)
+                  .catch(reject),
+              500,
+            );
+          } else reject(new Error(`HTTP ${res.statusCode}`));
+          return;
+        }
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => resolve(Buffer.concat(chunks)));
+        res.on("error", (err) => {
+          if (attempt < maxRetries) {
+            setTimeout(
+              () =>
+                downloadImageBuffer(url, attempt + 1)
+                  .then(resolve)
+                  .catch(reject),
+              500,
+            );
+          } else reject(err);
+        });
+      },
+    );
     req.on("error", (err) => {
       if (attempt < maxRetries) {
-        setTimeout(() => downloadImageBuffer(url, attempt + 1).then(resolve).catch(reject), 500);
+        setTimeout(
+          () => downloadImageBuffer(url, attempt + 1).then(resolve).catch(reject),
+          500,
+        );
       } else reject(err);
     });
     req.on("timeout", () => {
       req.destroy();
       if (attempt < maxRetries) {
-        setTimeout(() => downloadImageBuffer(url, attempt + 1).then(resolve).catch(reject), 500);
+        setTimeout(
+          () => downloadImageBuffer(url, attempt + 1).then(resolve).catch(reject),
+          500,
+        );
       } else reject(new Error("timeout after retries"));
     });
   });
 }
 
-async function downloadAndWatermarkImage(imageUrl: string, adIndex: number, imgIndex: number): Promise<string> {
+async function downloadAndWatermarkImage(
+  imageUrl: string,
+  adIndex: number,
+  imgIndex: number,
+): Promise<string> {
   try {
     if (imageUrl.includes("/uploads/ads/")) return imageUrl;
     if (!imageUrl || typeof imageUrl !== "string") return imageUrl;
@@ -108,26 +156,26 @@ async function downloadAndWatermarkImage(imageUrl: string, adIndex: number, imgI
     const filename = `bulk-${adIndex}-${imgIndex}-${Date.now()}.webp`;
     const filePath = path.join(adsUploadDir, filename);
     const wm = await getWatermark();
-    // ─── تغییر: اندازه ثابت ۲۰۰×۲۰۰ پیکسل (حفظ نسبت ابعاد با fit inside) ───
     const resizedWm = await sharp(wm)
-.resize(120, 120, { fit: "inside", withoutEnlargement: true })
-  .toBuffer();
+      .resize(120, 120, { fit: "inside", withoutEnlargement: true })
+      .toBuffer();
     await sharp(imageBuffer)
       .resize(1024, undefined, { fit: "inside", withoutEnlargement: true })
-      .composite([{ input: resizedWm, gravity: "southwest" }]) // پایین سمت چپ
+      .composite([{ input: resizedWm, gravity: "southwest" }])
       .webp({ quality: 75 })
       .toFile(filePath);
-    const port = process.env.PORT || 5001;
-    const baseUrl = process.env.BASE_URL || `http://localhost:${port}`;
-    return `${baseUrl}/uploads/ads/${filename}`;
+    return `${BASE_URL}/uploads/ads/${filename}`;
   } catch (err: any) {
     console.error(`❌ خطا در واترمارک: ${err?.message}`);
     return imageUrl;
   }
 }
+
 async function processAdImages(images: string[], adIndex: number): Promise<string[]> {
   if (!Array.isArray(images) || images.length === 0) return images;
-  return asyncPool(20, images, (url, idx) => downloadAndWatermarkImage(url, adIndex, idx));
+  return asyncPool(20, images, (url, idx) =>
+    downloadAndWatermarkImage(url, adIndex, idx),
+  );
 }
 
 // ═══════════️ ابزارهای عددی ════════════
@@ -149,7 +197,10 @@ function parseNumber(str: any): number {
 // ═══════════️ استخراج قیمت از متن ════════════
 function extractPriceFromText(text: string): number | null {
   if (!text) return null;
-  const cleaned = text.replace(/[\u200B-\u200F\uFEFF]/g, "").replace(/\s+/g, " ").trim();
+  const cleaned = text
+    .replace(/[\u200B-\u200F\uFEFF]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
   const patterns = [
     /(?:قیمت\s*(?:کل|نهایی|فروش|رهن)?\s*[:\-–]?\s*)([\d,،٫]+)\s*تومان/i,
     /([\d,،٫]{5,})\s*تومان/i,
@@ -182,9 +233,9 @@ function extractPriceFromText(text: string): number | null {
 
 // ═══════════️ استخراج قیمت اصلی ════════════
 function extractPrice(d: any, attrs: Record<string, string>): number {
-  if (d.rawJsonLd?.price && typeof d.rawJsonLd.price === 'number' && d.rawJsonLd.price > 0)
+  if (d.rawJsonLd?.price && typeof d.rawJsonLd.price === "number" && d.rawJsonLd.price > 0)
     return d.rawJsonLd.price;
-  if (d.rawJsonLd?.offers?.Price && typeof d.rawJsonLd.offers.Price === 'number' && d.rawJsonLd.offers.Price > 0)
+  if (d.rawJsonLd?.offers?.Price && typeof d.rawJsonLd.offers.Price === "number" && d.rawJsonLd.offers.Price > 0)
     return d.rawJsonLd.offers.Price;
   if (d.rawData?.sections?.LIST_DATA) {
     for (const widget of d.rawData.sections.LIST_DATA) {
@@ -194,8 +245,8 @@ function extractPrice(d: any, attrs: Record<string, string>): number {
       }
     }
   }
-  if (typeof d.price === 'number' && d.price > 0) return d.price;
-  if (typeof d.price === 'string') {
+  if (typeof d.price === "number" && d.price > 0) return d.price;
+  if (typeof d.price === "string") {
     if (/توافقی|negotiable|رایگان|free/i.test(d.price.trim())) return 0;
     const n = parseNumber(d.price);
     if (n > 0) return n;
@@ -274,11 +325,6 @@ async function getCategoryId(title: string, description: string): Promise<string
 
 // ═══════════️ تشخیص آگهی غیرفعال ════════════
 function isAdUnavailable(d: any): boolean {
-  // غیرفعال‌سازی بررسی تاریخ انقضای دیوار
-  // if (d.rawData?.seo?.unavailableAfter) {
-  //   const date = new Date(d.rawData.seo.unavailableAfter);
-  //   if (!isNaN(date.getTime()) && date < new Date()) return true;
-  // }
   if (d.status === "sold" || d.status === "expired" || d.status === "deleted") return true;
   if (d.sold === true || d.expired === true) return true;
   return false;
@@ -289,13 +335,13 @@ function getSourceId(item: any): string {
   return d.token || d.id || item.id || `bulk_${Date.now()}_${Math.random().toString(36).substr(2, 7)}`;
 }
 
-// ═══════════️ نگاشت نهایی (بهبودیافته برای دیوار) ════════════
+// ═══════════️ نگاشت نهایی ════════════
 function mapToAdPayload(
   item: any,
   uploaderId: string,
   expertPhone: string,
   expertName: string,
-  categoryId: string
+  categoryId: string,
 ) {
   const d = item.data || item;
   const isDivar = !!d.rawData;
@@ -303,7 +349,6 @@ function mapToAdPayload(
 
   let title = (d.title || "").substring(0, 200) || "بدون عنوان";
 
-  // ── توضیحات (اولویت با seo.description) ──
   let description = d.description || "";
   if (isDivar) {
     if (!description || description === "توضیحات" || description.trim().length < 10) {
@@ -326,8 +371,11 @@ function mapToAdPayload(
     }
   }
 
-  // ── موقعیت مکانی ──
-  let city = "", province = "", district = "", latitude: number | undefined, longitude: number | undefined;
+  let city = "",
+    province = "",
+    district = "",
+    latitude: number | undefined,
+    longitude: number | undefined;
   if (isDivar) {
     city = d.city || "";
     district = d.district || "";
@@ -355,7 +403,6 @@ function mapToAdPayload(
     if (!province) province = d.province || "";
   }
 
-  // ── تصاویر (تلاش چندلایه) ──
   let images: string[] = [];
   if (Array.isArray(d.images) && d.images.length > 0) {
     images = d.images;
@@ -372,11 +419,10 @@ function mapToAdPayload(
   if (images.length === 0 && d.rawMeta?.image) {
     images = [d.rawMeta.image];
   }
-  if (images.length === 0 && typeof d.image === 'string' && d.image.length > 0) {
+  if (images.length === 0 && typeof d.image === "string" && d.image.length > 0) {
     images = [d.image];
   }
 
-  // ── نوع آگهی ──
   let adType = "sale";
   if (isDivar) {
     const cat = d.category || "";
@@ -388,7 +434,6 @@ function mapToAdPayload(
     else if (d.category === "forRent" || d.category?.includes("اجاره")) adType = "rent";
   }
 
-  // ── ویژگی‌ها ──
   let attrs: Record<string, string> = {};
   if (isDivar && Array.isArray(d.attributes)) {
     d.attributes.forEach((attr: any) => {
@@ -516,10 +561,9 @@ function mapToAdPayload(
   };
 }
 
-// آستانه‌ی پذیرش کمی آسان‌تر
 function isAdValid(payload: any): boolean {
   if (!payload.title || payload.title.trim().length < 3) return false;
-  const hasDesc = payload.description && payload.description.trim().length > 5; // ۵ کاراکتر
+  const hasDesc = payload.description && payload.description.trim().length > 5;
   const hasImages = Array.isArray(payload.images) && payload.images.length > 0;
   const hasPrice = payload.price > 0;
   return hasDesc || hasImages || hasPrice;
@@ -582,7 +626,6 @@ export const getTaskStatus = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ═══════════️ Worker پس‌زمینه ════════════
 let isWorkerRunning = false;
 export function startBulkWorker() {
   setInterval(async () => {
@@ -601,11 +644,10 @@ export function startBulkWorker() {
 }
 
 async function processBulkTask(taskId: any) {
-  // قاپیدن اتمی تسک
   const task = await BulkTask.findOneAndUpdate(
     { _id: taskId, status: "pending" },
     { status: "processing" },
-    { new: true }
+    { new: true },
   );
   if (!task) return;
 
@@ -613,7 +655,7 @@ async function processBulkTask(taskId: any) {
     if (!fs.existsSync(task.fileName)) throw new Error("فایل ZIP یافت نشد");
     const zip = new AdmZip(task.fileName);
     const entries = zip.getEntries();
-    const jsonFiles = entries.filter(e => !e.isDirectory && e.entryName.endsWith(".json"));
+    const jsonFiles = entries.filter((e) => !e.isDirectory && e.entryName.endsWith(".json"));
     if (jsonFiles.length === 0) throw new Error("هیچ فایل JSON در ZIP یافت نشد");
 
     const allItems: { item: any; fileName: string; index: number }[] = [];
@@ -628,12 +670,12 @@ async function processBulkTask(taskId: any) {
 
     fs.unlink(task.fileName, () => {});
 
-    await BulkTask.findByIdAndUpdate(taskId, { 'progress.total': allItems.length });
+    await BulkTask.findByIdAndUpdate(taskId, { "progress.total": allItems.length });
 
     const sourceIds = allItems.map(({ item }) => getSourceId(item));
     const existingAds = await Ad.find(
       { source: { $in: ["divar", "sheypoor", "bama", "manual"] }, sourceId: { $in: sourceIds } },
-      { sourceId: 1, source: 1 }
+      { sourceId: 1, source: 1 },
     ).lean();
     const existingSourceIds = new Set(existingAds.map((ad: any) => ad.sourceId));
 
@@ -643,7 +685,9 @@ async function processBulkTask(taskId: any) {
 
     const adDocs: any[] = [];
     const auditLogDocs: any[] = [];
-    let successCount = 0, errorCount = 0, skipCount = 0;
+    let successCount = 0,
+      errorCount = 0,
+      skipCount = 0;
     const errorLog: any[] = [];
     let processedCount = 0;
     let lastSaveTime = Date.now();
@@ -654,12 +698,12 @@ async function processBulkTask(taskId: any) {
         const safeProcessed = Math.min(processedCount, allItems.length);
         await BulkTask.findByIdAndUpdate(taskId, {
           $set: {
-            'progress.processed': safeProcessed,
-            'progress.success': successCount,
-            'progress.errors': errorCount,
-            'progress.skipped': skipCount,
-          }
-        }).catch(e => console.error("save task error:", e));
+            "progress.processed": safeProcessed,
+            "progress.success": successCount,
+            "progress.errors": errorCount,
+            "progress.skipped": skipCount,
+          },
+        }).catch((e) => console.error("save task error:", e));
         lastSaveTime = now;
       }
     };
@@ -743,7 +787,7 @@ async function processBulkTask(taskId: any) {
           skipped: skipCount,
         },
         errorLog: errorLog,
-      }
+      },
     });
 
     await sendNotificationToUser(
@@ -752,12 +796,12 @@ async function processBulkTask(taskId: any) {
       `${successCount} آگهی ایجاد شد.${errorCount ? ` (${errorCount} خطا)` : ""}${skipCount ? ` (${skipCount} رد شده)` : ""}`,
       "info",
       "/panel/expert/bulk-upload",
-      { success: successCount, errors: errorCount, skipped: skipCount }
+      { success: successCount, errors: errorCount, skipped: skipCount },
     );
   } catch (err: any) {
     await BulkTask.findByIdAndUpdate(taskId, {
       $set: { status: "failed" },
-      $push: { errorLog: { row: "system", index: 0, type: "error", message: err.message } }
+      $push: { errorLog: { row: "system", index: 0, type: "error", message: err.message } },
     });
   }
 }
