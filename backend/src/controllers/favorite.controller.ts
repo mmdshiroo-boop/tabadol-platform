@@ -5,6 +5,8 @@ import { Ad } from "../models/Ad.model";
 import { createAuditLog } from "../services/auditLog.service";
 import { AuditAction } from "../models/AuditLog.model";
 import { AuthRequest } from "../middleware/auth.middleware";
+import { grantPointsIfNotGranted } from "../services/loyalty.service";
+import { LOYALTY_RULES } from "../config/loyalty";
 // ==================== افزودن به نشان شده‌ها ====================
 export const addFavorite = async (req: AuthRequest, res: Response) => {
   try {
@@ -32,7 +34,18 @@ export const addFavorite = async (req: AuthRequest, res: Response) => {
     }
 
     const favorite = await Favorite.create({ userId, adId });
-
+// 🆕 اعطای امتیاز ذخیره آگهی (فقط یک بار برای هر آگهی)
+try {
+  await grantPointsIfNotGranted(
+    userId.toString(),
+    LOYALTY_RULES.FAVORITE,
+    `favorite_${adId}`,
+    "ذخیره آگهی",
+    { adId }
+  );
+} catch (pointError) {
+  console.error("Error granting points for favorite:", pointError);
+}
     // ⭐ افزایش شمارنده saves در آگهی
     await Ad.findByIdAndUpdate(adId, { $inc: { saves: 1 } });
 

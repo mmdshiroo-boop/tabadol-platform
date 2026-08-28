@@ -1,17 +1,15 @@
 import { Response } from "express";
-import { Ad } from "../models/Ad.model";
 import fs from "fs";
 import AdmZip from "adm-zip";
 import path from "path";
 import sharp from "sharp";
 import https from "https";
 import http from "http";
-import { AuditAction } from "../models/AuditLog.model";
 import { AuthRequest } from "../middleware/auth.middleware";
-import { Category } from "../models";
-import { BulkTask } from "../models/BulkTask.model";
 import { sendNotificationToUser } from "../services/notification.service";
-import { AuditLog } from "../models/AuditLog.model";
+import { Ad, Category } from "../models";
+import { BulkTask } from "../models/BulkTask.model";
+import { AuditAction, AuditLog } from "../models/AuditLog.model";
 
 // ═══════════️ واترمارک و ابزارهای تصویر ════════════
 const adsUploadDir = path.resolve(process.cwd(), "uploads", "ads");
@@ -27,11 +25,7 @@ async function getWatermark(): Promise<Buffer> {
   return cachedWatermark!;
 }
 
-async function asyncPool<T>(
-  concurrency: number,
-  items: T[],
-  iteratorFn: (item: T, index: number) => Promise<any>
-): Promise<any[]> {
+async function asyncPool<T>(concurrency: number, items: T[], iteratorFn: (item: T, index: number) => Promise<any>): Promise<any[]> {
   const ret: Promise<any>[] = [];
   const executing: Promise<any>[] = [];
   for (const [i, item] of items.entries()) {
@@ -48,9 +42,8 @@ async function asyncPool<T>(
   return Promise.all(ret);
 }
 
-// 🔽 عامل‌های HTTP با تعداد کم برای جلوگیری از فشار
-const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 5 });
-const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 5 });
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 50 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 50 });
 
 function downloadImageBuffer(url: string, attempt = 0): Promise<Buffer> {
   const maxRetries = 2;
@@ -59,98 +52,69 @@ function downloadImageBuffer(url: string, attempt = 0): Promise<Buffer> {
     try {
       const parsed = new URL(url);
       referer = parsed.origin;
-      if (url.includes("divarcdn.com") || url.includes("divar.ir"))
-        referer = "https://divar.ir";
-      else if (url.includes("sheypoor.com") || url.includes("cdn.sheypoor.com"))
-        referer = "https://www.sheypoor.com";
+      if (url.includes("divarcdn.com") || url.includes("divar.ir")) referer = "https://divar.ir";
+      else if (url.includes("sheypoor.com") || url.includes("cdn.sheypoor.com")) referer = "https://www.sheypoor.com";
     } catch {}
     const client = url.startsWith("https") ? https : http;
-    const req = client.get(
-      url,
-      {
-        agent: url.startsWith("https") ? httpsAgent : httpAgent,
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          Referer: referer,
-          Accept: "image/webp,image/*,*/*;q=0.8",
-          "Accept-Encoding": "identity",
-        },
-        timeout: 10000,
+    const req = client.get(url, {
+      agent: url.startsWith("https") ? httpsAgent : httpAgent,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        Referer: referer,
+        Accept: "image/webp,image/*,*/*;q=0.8",
+        "Accept-Encoding": "identity",
       },
-      (res) => {
-        if (
-          res.statusCode &&
-          res.statusCode >= 300 &&
-          res.statusCode < 400 &&
-          res.headers.location
-        ) {
-          return downloadImageBuffer(res.headers.location, attempt)
-            .then(resolve)
-            .catch(reject);
-        }
-        if (!res.statusCode || res.statusCode !== 200) {
-          if (attempt < maxRetries) {
-            setTimeout(() => {
-              downloadImageBuffer(url, attempt + 1).then(resolve).catch(reject);
-            }, 500);
-          } else reject(new Error(`HTTP ${res.statusCode}`));
-          return;
-        }
-        const chunks: Buffer[] = [];
-        res.on("data", (chunk: Buffer) => chunks.push(chunk));
-        res.on("end", () => resolve(Buffer.concat(chunks)));
-        res.on("error", (err) => {
-          if (attempt < maxRetries) {
-            setTimeout(() => {
-              downloadImageBuffer(url, attempt + 1).then(resolve).catch(reject);
-            }, 500);
-          } else reject(err);
-        });
+      timeout: 10000,
+    }, (res) => {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        return downloadImageBuffer(res.headers.location, attempt).then(resolve).catch(reject);
       }
-    );
+      if (!res.statusCode || res.statusCode !== 200) {
+        if (attempt < maxRetries) {
+          setTimeout(() => downloadImageBuffer(url, attempt + 1).then(resolve).catch(reject), 500);
+        } else reject(new Error(`HTTP ${res.statusCode}`));
+        return;
+      }
+      const chunks: Buffer[] = [];
+      res.on("data", (chunk: Buffer) => chunks.push(chunk));
+      res.on("end", () => resolve(Buffer.concat(chunks)));
+      res.on("error", (err) => {
+        if (attempt < maxRetries) {
+          setTimeout(() => downloadImageBuffer(url, attempt + 1).then(resolve).catch(reject), 500);
+        } else reject(err);
+      });
+    });
     req.on("error", (err) => {
       if (attempt < maxRetries) {
-        setTimeout(() => {
-          downloadImageBuffer(url, attempt + 1).then(resolve).catch(reject);
-        }, 500);
+        setTimeout(() => downloadImageBuffer(url, attempt + 1).then(resolve).catch(reject), 500);
       } else reject(err);
     });
     req.on("timeout", () => {
       req.destroy();
       if (attempt < maxRetries) {
-        setTimeout(() => {
-          downloadImageBuffer(url, attempt + 1).then(resolve).catch(reject);
-        }, 500);
+        setTimeout(() => downloadImageBuffer(url, attempt + 1).then(resolve).catch(reject), 500);
       } else reject(new Error("timeout after retries"));
     });
   });
 }
 
-async function downloadAndWatermarkImage(
-  imageUrl: string,
-  adIndex: number,
-  imgIndex: number
-): Promise<string> {
+async function downloadAndWatermarkImage(imageUrl: string, adIndex: number, imgIndex: number): Promise<string> {
   try {
     if (imageUrl.includes("/uploads/ads/")) return imageUrl;
     if (!imageUrl || typeof imageUrl !== "string") return imageUrl;
     const imageBuffer = await downloadImageBuffer(imageUrl);
     if (!imageBuffer || imageBuffer.length < 1000) return imageUrl;
-    if (!fs.existsSync(adsUploadDir))
-      fs.mkdirSync(adsUploadDir, { recursive: true });
+    if (!fs.existsSync(adsUploadDir)) fs.mkdirSync(adsUploadDir, { recursive: true });
     const filename = `bulk-${adIndex}-${imgIndex}-${Date.now()}.webp`;
     const filePath = path.join(adsUploadDir, filename);
     const wm = await getWatermark();
-    const metadata = await sharp(imageBuffer).metadata();
-    const imgWidth = metadata.width || 800;
-    const wmWidth = Math.min(300, Math.max(100, Math.floor(imgWidth * 0.15)));
+    // ─── تغییر: اندازه ثابت ۲۰۰×۲۰۰ پیکسل (حفظ نسبت ابعاد با fit inside) ───
     const resizedWm = await sharp(wm)
-      .resize(wmWidth, undefined, { fit: "inside", withoutEnlargement: true })
-      .toBuffer();
+.resize(120, 120, { fit: "inside", withoutEnlargement: true })
+  .toBuffer();
     await sharp(imageBuffer)
       .resize(1024, undefined, { fit: "inside", withoutEnlargement: true })
-      .composite([{ input: resizedWm, gravity: "southwest" }])
+      .composite([{ input: resizedWm, gravity: "southwest" }]) // پایین سمت چپ
       .webp({ quality: 75 })
       .toFile(filePath);
     const port = process.env.PORT || 5001;
@@ -161,16 +125,9 @@ async function downloadAndWatermarkImage(
     return imageUrl;
   }
 }
-
-// 🔽 پردازش تصاویر با هم‌روندی ۱
-async function processAdImages(
-  images: string[],
-  adIndex: number
-): Promise<string[]> {
+async function processAdImages(images: string[], adIndex: number): Promise<string[]> {
   if (!Array.isArray(images) || images.length === 0) return images;
-  return asyncPool(1, images, (url, idx) =>
-    downloadAndWatermarkImage(url, adIndex, idx)
-  );
+  return asyncPool(20, images, (url, idx) => downloadAndWatermarkImage(url, adIndex, idx));
 }
 
 // ═══════════️ ابزارهای عددی ════════════
@@ -192,10 +149,7 @@ function parseNumber(str: any): number {
 // ═══════════️ استخراج قیمت از متن ════════════
 function extractPriceFromText(text: string): number | null {
   if (!text) return null;
-  const cleaned = text
-    .replace(/[\u200B-\u200F\uFEFF]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  const cleaned = text.replace(/[\u200B-\u200F\uFEFF]/g, "").replace(/\s+/g, " ").trim();
   const patterns = [
     /(?:قیمت\s*(?:کل|نهایی|فروش|رهن)?\s*[:\-–]?\s*)([\d,،٫]+)\s*تومان/i,
     /([\d,،٫]{5,})\s*تومان/i,
@@ -228,17 +182,9 @@ function extractPriceFromText(text: string): number | null {
 
 // ═══════════️ استخراج قیمت اصلی ════════════
 function extractPrice(d: any, attrs: Record<string, string>): number {
-  if (
-    d.rawJsonLd?.price &&
-    typeof d.rawJsonLd.price === "number" &&
-    d.rawJsonLd.price > 0
-  )
+  if (d.rawJsonLd?.price && typeof d.rawJsonLd.price === 'number' && d.rawJsonLd.price > 0)
     return d.rawJsonLd.price;
-  if (
-    d.rawJsonLd?.offers?.Price &&
-    typeof d.rawJsonLd.offers.Price === "number" &&
-    d.rawJsonLd.offers.Price > 0
-  )
+  if (d.rawJsonLd?.offers?.Price && typeof d.rawJsonLd.offers.Price === 'number' && d.rawJsonLd.offers.Price > 0)
     return d.rawJsonLd.offers.Price;
   if (d.rawData?.sections?.LIST_DATA) {
     for (const widget of d.rawData.sections.LIST_DATA) {
@@ -248,30 +194,18 @@ function extractPrice(d: any, attrs: Record<string, string>): number {
       }
     }
   }
-  if (typeof d.price === "number" && d.price > 0) return d.price;
-  if (typeof d.price === "string") {
+  if (typeof d.price === 'number' && d.price > 0) return d.price;
+  if (typeof d.price === 'string') {
     if (/توافقی|negotiable|رایگان|free/i.test(d.price.trim())) return 0;
     const n = parseNumber(d.price);
     if (n > 0) return n;
   }
-  const attrPriceKeys = [
-    "قیمت کل",
-    "قیمت",
-    "ودیعه",
-    "اجارهٔ ماهانه",
-    "اجاره ماهانه",
-    "پیش پرداخت",
-  ];
+  const attrPriceKeys = ["قیمت کل", "قیمت", "ودیعه", "اجارهٔ ماهانه", "اجاره ماهانه", "پیش پرداخت"];
   for (const key of attrPriceKeys) {
     const v = parseNumber(attrs[key]);
     if (v > 0) return v;
   }
-  const dailyRentKeys = [
-    "روزهای عادی",
-    "آخر هفته",
-    "روزهای خاص",
-    "هزینهٔ هر نفر اضافه",
-  ];
+  const dailyRentKeys = ["روزهای عادی", "آخر هفته", "روزهای خاص", "هزینهٔ هر نفر اضافه"];
   for (const key of dailyRentKeys) {
     const rawVal = attrs[key];
     if (rawVal) {
@@ -281,19 +215,10 @@ function extractPrice(d: any, attrs: Record<string, string>): number {
   }
   if (d.rawData?.sections?.LIST_DATA) {
     for (const widget of d.rawData.sections.LIST_DATA) {
-      if (
-        widget.widgetType === "UNEXPANDABLE_ROW" ||
-        widget.widgetType === "DESCRIPTION_ROW"
-      ) {
+      if (widget.widgetType === "UNEXPANDABLE_ROW" || widget.widgetType === "DESCRIPTION_ROW") {
         const title = widget.dto?.data?.title;
         const value = widget.dto?.data?.value;
-        if (
-          title &&
-          value &&
-          /قیمت|ودیعه|اجاره|پیش‌پرداخت|روزهای عادی|آخر هفته|روزهای خاص|هزینه/i.test(
-            title
-          )
-        ) {
+        if (title && value && /قیمت|ودیعه|اجاره|پیش‌پرداخت|روزهای عادی|آخر هفته|روزهای خاص|هزینه/i.test(title)) {
           const num = parseNumber(value);
           if (num > 0) return num;
         }
@@ -327,18 +252,14 @@ function detectPriceType(d: any, attrs: Record<string, string>): string {
   const priceStr = String(d.price ?? "").trim();
   if (/توافقی|negotiable|رایگان|free/i.test(priceStr)) return "negotiable";
   for (const key of ["قیمت کل", "قیمت", "ودیعه"]) {
-    if (attrs[key] && /توافقی|رایگان/i.test(String(attrs[key])))
-      return "negotiable";
+    if (attrs[key] && /توافقی|رایگان/i.test(String(attrs[key]))) return "negotiable";
   }
   return extractPrice(d, attrs) === 0 ? "negotiable" : "fixed";
 }
 
 // ═══════════️ کش دسته‌بندی ════════════
 let categoryCache: any[] | null = null;
-async function getCategoryId(
-  title: string,
-  description: string
-): Promise<string | null> {
+async function getCategoryId(title: string, description: string): Promise<string | null> {
   if (!categoryCache) {
     categoryCache = await Category.find({}).lean();
   }
@@ -353,23 +274,22 @@ async function getCategoryId(
 
 // ═══════════️ تشخیص آگهی غیرفعال ════════════
 function isAdUnavailable(d: any): boolean {
-  if (d.status === "sold" || d.status === "expired" || d.status === "deleted")
-    return true;
+  // غیرفعال‌سازی بررسی تاریخ انقضای دیوار
+  // if (d.rawData?.seo?.unavailableAfter) {
+  //   const date = new Date(d.rawData.seo.unavailableAfter);
+  //   if (!isNaN(date.getTime()) && date < new Date()) return true;
+  // }
+  if (d.status === "sold" || d.status === "expired" || d.status === "deleted") return true;
   if (d.sold === true || d.expired === true) return true;
   return false;
 }
 
 function getSourceId(item: any): string {
   const d = item.data || item;
-  return (
-    d.token ||
-    d.id ||
-    item.id ||
-    `bulk_${Date.now()}_${Math.random().toString(36).substr(2, 7)}`
-  );
+  return d.token || d.id || item.id || `bulk_${Date.now()}_${Math.random().toString(36).substr(2, 7)}`;
 }
 
-// ═══════════️ نگاشت نهایی (با اصلاح floor) ════════════
+// ═══════════️ نگاشت نهایی (بهبودیافته برای دیوار) ════════════
 function mapToAdPayload(
   item: any,
   uploaderId: string,
@@ -383,13 +303,10 @@ function mapToAdPayload(
 
   let title = (d.title || "").substring(0, 200) || "بدون عنوان";
 
+  // ── توضیحات (اولویت با seo.description) ──
   let description = d.description || "";
   if (isDivar) {
-    if (
-      !description ||
-      description === "توضیحات" ||
-      description.trim().length < 10
-    ) {
+    if (!description || description === "توضیحات" || description.trim().length < 10) {
       const seoDesc = d.rawData?.seo?.description;
       if (seoDesc && seoDesc.trim().length > 10) {
         description = seoDesc.trim();
@@ -409,11 +326,8 @@ function mapToAdPayload(
     }
   }
 
-  let city = "",
-    province = "",
-    district = "",
-    latitude: number | undefined,
-    longitude: number | undefined;
+  // ── موقعیت مکانی ──
+  let city = "", province = "", district = "", latitude: number | undefined, longitude: number | undefined;
   if (isDivar) {
     city = d.city || "";
     district = d.district || "";
@@ -427,8 +341,7 @@ function mapToAdPayload(
       latitude = geo.latitude;
       longitude = geo.longitude;
     }
-    const addressData =
-      d.rawJsonLd?.itemOffered?.address || d.rawJsonLd?.geo?.address;
+    const addressData = d.rawJsonLd?.itemOffered?.address || d.rawJsonLd?.geo?.address;
     if (typeof addressData === "string") {
       const parts = addressData.split(" ");
       province = parts[0] || "";
@@ -442,6 +355,7 @@ function mapToAdPayload(
     if (!province) province = d.province || "";
   }
 
+  // ── تصاویر (تلاش چندلایه) ──
   let images: string[] = [];
   if (Array.isArray(d.images) && d.images.length > 0) {
     images = d.images;
@@ -458,25 +372,23 @@ function mapToAdPayload(
   if (images.length === 0 && d.rawMeta?.image) {
     images = [d.rawMeta.image];
   }
-  if (images.length === 0 && typeof d.image === "string" && d.image.length > 0) {
+  if (images.length === 0 && typeof d.image === 'string' && d.image.length > 0) {
     images = [d.image];
   }
 
+  // ── نوع آگهی ──
   let adType = "sale";
   if (isDivar) {
     const cat = d.category || "";
     if (cat.includes("اجاره")) {
-      adType =
-        cat.includes("روزانه") || cat.includes("کوتاه‌مدت")
-          ? "daily_rent"
-          : "rent";
+      adType = cat.includes("روزانه") || cat.includes("کوتاه‌مدت") ? "daily_rent" : "rent";
     }
   } else if (isSheypoor) {
     if (d.category === "forSale") adType = "sale";
-    else if (d.category === "forRent" || d.category?.includes("اجاره"))
-      adType = "rent";
+    else if (d.category === "forRent" || d.category?.includes("اجاره")) adType = "rent";
   }
 
+  // ── ویژگی‌ها ──
   let attrs: Record<string, string> = {};
   if (isDivar && Array.isArray(d.attributes)) {
     d.attributes.forEach((attr: any) => {
@@ -484,13 +396,10 @@ function mapToAdPayload(
     });
   }
   if (isSheypoor) {
-    const addProps =
-      d.rawJsonLd?.itemOffered?.additionalProperty ||
-      d.rawJsonLd?.additionalProperty;
+    const addProps = d.rawJsonLd?.itemOffered?.additionalProperty || d.rawJsonLd?.additionalProperty;
     if (Array.isArray(addProps)) {
       addProps.forEach((prop: any) => {
-        if (prop.name && prop.value !== undefined)
-          attrs[prop.name] = String(prop.value);
+        if (prop.name && prop.value !== undefined) attrs[prop.name] = String(prop.value);
       });
     }
     if (Array.isArray(d.attributes)) {
@@ -501,12 +410,7 @@ function mapToAdPayload(
   }
 
   if (isDivar && adType === "rent") {
-    if (
-      attrs["ظرفیت استاندارد"] ||
-      attrs["ظرفیت اضافه"] ||
-      attrs["روزهای عادی"] ||
-      attrs["آخر هفته"]
-    ) {
+    if (attrs["ظرفیت استاندارد"] || attrs["ظرفیت اضافه"] || attrs["روزهای عادی"] || attrs["آخر هفته"]) {
       adType = "daily_rent";
     }
   }
@@ -526,31 +430,19 @@ function mapToAdPayload(
     }
   }
 
-  if (
-    (adType === "rent" || adType === "daily_rent") &&
-    (deposit > 0 || monthlyRent > 0)
-  ) {
+  if ((adType === "rent" || adType === "daily_rent") && (deposit > 0 || monthlyRent > 0)) {
     const priceLines = [];
-    if (deposit > 0)
-      priceLines.push(`ودیعه: ${deposit.toLocaleString("fa-IR")} تومان`);
-    if (monthlyRent > 0)
-      priceLines.push(
-        `اجاره ماهانه: ${monthlyRent.toLocaleString("fa-IR")} تومان`
-      );
-    if (priceLines.length > 0)
-      description = priceLines.join(" | ") + "\n\n" + description;
+    if (deposit > 0) priceLines.push(`ودیعه: ${deposit.toLocaleString("fa-IR")} تومان`);
+    if (monthlyRent > 0) priceLines.push(`اجاره ماهانه: ${monthlyRent.toLocaleString("fa-IR")} تومان`);
+    if (priceLines.length > 0) description = priceLines.join(" | ") + "\n\n" + description;
   }
 
   if (adType === "daily_rent") {
     const dailyPrices = [];
-    if (attrs["روزهای عادی"])
-      dailyPrices.push(`روزهای عادی: ${attrs["روزهای عادی"]}`);
-    if (attrs["آخر هفته"])
-      dailyPrices.push(`آخر هفته: ${attrs["آخر هفته"]}`);
-    if (attrs["روزهای خاص"])
-      dailyPrices.push(`روزهای خاص: ${attrs["روزهای خاص"]}`);
-    if (attrs["هزینهٔ هر نفر اضافه"])
-      dailyPrices.push(`هر نفر اضافه: ${attrs["هزینهٔ هر نفر اضافه"]}`);
+    if (attrs["روزهای عادی"]) dailyPrices.push(`روزهای عادی: ${attrs["روزهای عادی"]}`);
+    if (attrs["آخر هفته"]) dailyPrices.push(`آخر هفته: ${attrs["آخر هفته"]}`);
+    if (attrs["روزهای خاص"]) dailyPrices.push(`روزهای خاص: ${attrs["روزهای خاص"]}`);
+    if (attrs["هزینهٔ هر نفر اضافه"]) dailyPrices.push(`هر نفر اضافه: ${attrs["هزینهٔ هر نفر اضافه"]}`);
     if (dailyPrices.length > 0) {
       description = "💰 هزینه‌ها:\n" + dailyPrices.join("\n") + "\n\n" + description;
     }
@@ -559,10 +451,6 @@ function mapToAdPayload(
   let rooms = parseNumber(d.rooms || attrs["اتاق"] || attrs["تعداد اتاق"]);
   let area = parseNumber(d.area || attrs["متراژ"] || attrs["متراژ ویلا"]);
   if (isSheypoor && d.area && typeof d.area === "number") area = d.area;
-
-  // ✅ اصلاح floor: تبدیل مقدار رشته‌ای به عدد (مثلاً "۲ از ۴" → ۲)
-  const floorStr = attrs["طبقه"] || d.floor || "";
-  const floor = parseNumber(floorStr) || undefined;
 
   let amenities: any = {};
   if (isDivar && d.features) {
@@ -612,14 +500,11 @@ function mapToAdPayload(
     sellerName,
     rooms,
     area,
-    floor,   // ← عددی یا undefined
+    floor: attrs["طبقه"] || d.floor || "",
     latitude,
     longitude,
     amenities,
-    additionalProperties: Object.entries(attrs).map(([name, value]) => ({
-      name,
-      value,
-    })),
+    additionalProperties: Object.entries(attrs).map(([name, value]) => ({ name, value })),
     rawData: d,
     status: "active",
     isUrgent: false,
@@ -627,20 +512,15 @@ function mapToAdPayload(
     uploadedBy: uploaderId,
     slug,
     category: categoryId,
-    expiresAt: (() => {
-      const exp = new Date();
-      exp.setDate(exp.getDate() + 30);
-      return exp;
-    })(),
+    expiresAt: (() => { const exp = new Date(); exp.setDate(exp.getDate() + 30); return exp; })(),
   };
 }
 
+// آستانه‌ی پذیرش کمی آسان‌تر
 function isAdValid(payload: any): boolean {
   if (!payload.title || payload.title.trim().length < 3) return false;
-  const hasDesc =
-    payload.description && payload.description.trim().length > 5;
-  const hasImages =
-    Array.isArray(payload.images) && payload.images.length > 0;
+  const hasDesc = payload.description && payload.description.trim().length > 5; // ۵ کاراکتر
+  const hasImages = Array.isArray(payload.images) && payload.images.length > 0;
   const hasPrice = payload.price > 0;
   return hasDesc || hasImages || hasPrice;
 }
@@ -649,24 +529,14 @@ function isAdValid(payload: any): boolean {
 export const uploadBulkAds = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?._id;
-    if (!userId)
-      return res
-        .status(401)
-        .json({ success: false, message: "لطفاً وارد شوید" });
+    if (!userId) return res.status(401).json({ success: false, message: "لطفاً وارد شوید" });
     const files = (req as any).files;
-    if (!files || !files.zipFile)
-      return res
-        .status(400)
-        .json({ success: false, message: "فایل ZIP الزامی است" });
+    if (!files || !files.zipFile) return res.status(400).json({ success: false, message: "فایل ZIP الزامی است" });
     const zipFile = files.zipFile as any;
-    if (!zipFile.name.endsWith(".zip"))
-      return res
-        .status(400)
-        .json({ success: false, message: "فقط فایل‌های ZIP مجاز هستند" });
+    if (!zipFile.name.endsWith(".zip")) return res.status(400).json({ success: false, message: "فقط فایل‌های ZIP مجاز هستند" });
 
     const tempDir = path.resolve(process.cwd(), "temp");
-    if (!fs.existsSync(tempDir))
-      fs.mkdirSync(tempDir, { recursive: true });
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
     const tempPath = path.join(tempDir, `bulk-${Date.now()}.zip`);
     await zipFile.mv(tempPath);
 
@@ -686,9 +556,7 @@ export const uploadBulkAds = async (req: AuthRequest, res: Response) => {
     });
   } catch (error: any) {
     console.error("❌ خطا در دریافت فایل:", error);
-    return res
-      .status(500)
-      .json({ success: false, message: "خطا در دریافت فایل" });
+    return res.status(500).json({ success: false, message: "خطا در دریافت فایل" });
   }
 };
 
@@ -696,14 +564,10 @@ export const getTaskStatus = async (req: AuthRequest, res: Response) => {
   try {
     const { taskId } = req.params;
     const task = await BulkTask.findById(taskId);
-    if (!task)
-      return res
-        .status(404)
-        .json({ success: false, message: "وظیفه یافت نشد" });
+    if (!task) return res.status(404).json({ success: false, message: "وظیفه یافت نشد" });
     const total = task.progress.total || 0;
     const processed = task.progress.processed || 0;
-    const percent =
-      total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
+    const percent = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
     const taskObj = task.toObject();
     res.json({
       success: true,
@@ -718,20 +582,15 @@ export const getTaskStatus = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ═══════════️ Worker پس‌زمینه (فوق‌العاده سبک) ════════════
+// ═══════════️ Worker پس‌زمینه ════════════
 let isWorkerRunning = false;
 export function startBulkWorker() {
   setInterval(async () => {
     if (isWorkerRunning) return;
     isWorkerRunning = true;
     try {
-      const pendingTask = await BulkTask.findOne({ status: "pending" }).sort({
-        createdAt: 1,
-      });
-      if (!pendingTask) {
-        isWorkerRunning = false;
-        return;
-      }
+      const pendingTask = await BulkTask.findOne({ status: "pending" }).sort({ createdAt: 1 });
+      if (!pendingTask) { isWorkerRunning = false; return; }
       await processBulkTask(pendingTask._id);
     } catch (err) {
       console.error("Bulk worker error:", err);
@@ -742,6 +601,7 @@ export function startBulkWorker() {
 }
 
 async function processBulkTask(taskId: any) {
+  // قاپیدن اتمی تسک
   const task = await BulkTask.findOneAndUpdate(
     { _id: taskId, status: "pending" },
     { status: "processing" },
@@ -749,227 +609,155 @@ async function processBulkTask(taskId: any) {
   );
   if (!task) return;
 
-  const TIMEOUT_MS = 30 * 60 * 1000;
-  const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(
-      () =>
-        reject(new Error("پردازش تسک بیش از حد طول کشید (تایم‌اوت)")),
-      TIMEOUT_MS
-    )
-  );
-
   try {
-    await Promise.race([processTaskInternal(task), timeoutPromise]);
+    if (!fs.existsSync(task.fileName)) throw new Error("فایل ZIP یافت نشد");
+    const zip = new AdmZip(task.fileName);
+    const entries = zip.getEntries();
+    const jsonFiles = entries.filter(e => !e.isDirectory && e.entryName.endsWith(".json"));
+    if (jsonFiles.length === 0) throw new Error("هیچ فایل JSON در ZIP یافت نشد");
+
+    const allItems: { item: any; fileName: string; index: number }[] = [];
+    for (const entry of jsonFiles) {
+      try {
+        const content = entry.getData().toString("utf8");
+        const parsed = JSON.parse(content);
+        const items = Array.isArray(parsed) ? parsed : [parsed];
+        items.forEach((item, idx) => allItems.push({ item, fileName: entry.entryName, index: idx }));
+      } catch {}
+    }
+
+    fs.unlink(task.fileName, () => {});
+
+    await BulkTask.findByIdAndUpdate(taskId, { 'progress.total': allItems.length });
+
+    const sourceIds = allItems.map(({ item }) => getSourceId(item));
+    const existingAds = await Ad.find(
+      { source: { $in: ["divar", "sheypoor", "bama", "manual"] }, sourceId: { $in: sourceIds } },
+      { sourceId: 1, source: 1 }
+    ).lean();
+    const existingSourceIds = new Set(existingAds.map((ad: any) => ad.sourceId));
+
+    const expert = await (await import("../models/Expert.model")).Expert.findOne({ userId: task.userId });
+    const expertPhone = expert?.phone || "09120000000";
+    const expertName = `${expert?.firstName || ""} ${expert?.lastName || ""}`.trim() || expertPhone;
+
+    const adDocs: any[] = [];
+    const auditLogDocs: any[] = [];
+    let successCount = 0, errorCount = 0, skipCount = 0;
+    const errorLog: any[] = [];
+    let processedCount = 0;
+    let lastSaveTime = Date.now();
+
+    const maybeSaveTask = async () => {
+      const now = Date.now();
+      if (processedCount % 20 === 0 || now - lastSaveTime > 5000) {
+        const safeProcessed = Math.min(processedCount, allItems.length);
+        await BulkTask.findByIdAndUpdate(taskId, {
+          $set: {
+            'progress.processed': safeProcessed,
+            'progress.success': successCount,
+            'progress.errors': errorCount,
+            'progress.skipped': skipCount,
+          }
+        }).catch(e => console.error("save task error:", e));
+        lastSaveTime = now;
+      }
+    };
+
+    await asyncPool(50, allItems, async ({ item, fileName, index }) => {
+      const identifier = `${fileName}[${index}]`;
+      try {
+        const d = item.data || item;
+
+        if (isAdUnavailable(d)) {
+          skipCount++;
+          errorLog.push({ row: identifier, index: index + 1, type: "skip", message: "آگهی در منبع اصلی فروخته یا حذف شده است" });
+          processedCount++;
+          await maybeSaveTask();
+          return;
+        }
+
+        const sourceId = getSourceId(item);
+        if (existingSourceIds.has(sourceId)) {
+          skipCount++;
+          errorLog.push({ row: identifier, index: index + 1, type: "skip", message: "آگهی تکراری (قبلاً ثبت شده)" });
+          processedCount++;
+          await maybeSaveTask();
+          return;
+        }
+
+        const categoryId = await getCategoryId(d.title || "", d.description || "");
+        const catId = categoryId || "000000000000000000000000";
+        const adPayload = mapToAdPayload(item, task.userId.toString(), expertPhone, expertName, catId);
+
+        if (!isAdValid(adPayload)) {
+          skipCount++;
+          errorLog.push({ row: identifier, index: index + 1, type: "skip", message: "اطلاعات کافی نیست" });
+          processedCount++;
+          await maybeSaveTask();
+          return;
+        }
+
+        if (Array.isArray(adPayload.images) && adPayload.images.length > 0) {
+          adPayload.images = await processAdImages(adPayload.images, index);
+        }
+
+        adDocs.push(adPayload);
+        auditLogDocs.push({
+          userId: task.userId,
+          action: AuditAction.AD_CREATED,
+          resource: "Ad",
+          resourceId: null,
+          description: `کارشناس ${expertName} آگهی فله‌ای «${adPayload.title}» را ایجاد کرد.`,
+          metadata: { source: adPayload.source, originalId: adPayload.sourceId },
+          createdAt: new Date(),
+        });
+        successCount++;
+      } catch (itemErr: any) {
+        errorCount++;
+        errorLog.push({ row: identifier, index: index + 1, type: "error", message: itemErr.message });
+      } finally {
+        processedCount++;
+        await maybeSaveTask();
+      }
+    });
+
+    if (adDocs.length > 0) {
+      const insertedAds = await Ad.insertMany(adDocs, { ordered: false });
+      auditLogDocs.forEach((log, idx) => {
+        if (insertedAds[idx]) log.resourceId = insertedAds[idx]._id;
+      });
+    }
+    if (auditLogDocs.length > 0) {
+      await AuditLog.insertMany(auditLogDocs, { ordered: false });
+    }
+
+    await BulkTask.findByIdAndUpdate(taskId, {
+      $set: {
+        status: "completed",
+        progress: {
+          total: allItems.length,
+          processed: allItems.length,
+          success: successCount,
+          errors: errorCount,
+          skipped: skipCount,
+        },
+        errorLog: errorLog,
+      }
+    });
+
+    await sendNotificationToUser(
+      task.userId.toString(),
+      "تکمیل بارگذاری فله‌ای",
+      `${successCount} آگهی ایجاد شد.${errorCount ? ` (${errorCount} خطا)` : ""}${skipCount ? ` (${skipCount} رد شده)` : ""}`,
+      "info",
+      "/panel/expert/bulk-upload",
+      { success: successCount, errors: errorCount, skipped: skipCount }
+    );
   } catch (err: any) {
-    console.error("Bulk task failed:", err.message);
     await BulkTask.findByIdAndUpdate(taskId, {
       $set: { status: "failed" },
-      $push: {
-        errorLog: {
-          row: "system",
-          index: 0,
-          type: "error",
-          message: err.message,
-        },
-      },
+      $push: { errorLog: { row: "system", index: 0, type: "error", message: err.message } }
     });
   }
-}
-
-async function processTaskInternal(task: any) {
-  if (!fs.existsSync(task.fileName))
-    throw new Error("فایل ZIP یافت نشد");
-  const zip = new AdmZip(task.fileName);
-  const entries = zip.getEntries();
-  const jsonFiles = entries.filter(
-    (e) => !e.isDirectory && e.entryName.endsWith(".json")
-  );
-  if (jsonFiles.length === 0)
-    throw new Error("هیچ فایل JSON در ZIP یافت نشد");
-
-  const allItems: { item: any; fileName: string; index: number }[] = [];
-  for (const entry of jsonFiles) {
-    try {
-      const content = entry.getData().toString("utf8");
-      const parsed = JSON.parse(content);
-      const items = Array.isArray(parsed) ? parsed : [parsed];
-      items.forEach((item, idx) =>
-        allItems.push({ item, fileName: entry.entryName, index: idx })
-      );
-    } catch {}
-  }
-
-  fs.unlink(task.fileName, () => {});
-
-  await BulkTask.findByIdAndUpdate(task._id, {
-    "progress.total": allItems.length,
-  });
-
-  const sourceIds = allItems.map(({ item }) => getSourceId(item));
-  const existingAds = await Ad.find(
-    {
-      source: { $in: ["divar", "sheypoor", "bama", "manual"] },
-      sourceId: { $in: sourceIds },
-    },
-    { sourceId: 1, source: 1 }
-  ).lean();
-  const existingSourceIds = new Set(
-    existingAds.map((ad: any) => ad.sourceId)
-  );
-
-  const expert = await (
-    await import("../models/Expert.model")
-  ).Expert.findOne({ userId: task.userId });
-  const expertPhone = expert?.phone || "09120000000";
-  const expertName =
-    `${expert?.firstName || ""} ${expert?.lastName || ""}`.trim() ||
-    expertPhone;
-
-  const adDocs: any[] = [];
-  const auditLogDocs: any[] = [];
-  let successCount = 0,
-    errorCount = 0,
-    skipCount = 0;
-  const errorLog: any[] = [];
-  let processedCount = 0;
-  let lastSaveTime = Date.now();
-
-  const maybeSaveTask = async () => {
-    const now = Date.now();
-    if (processedCount % 20 === 0 || now - lastSaveTime > 5000) {
-      const safeProcessed = Math.min(processedCount, allItems.length);
-      await BulkTask.findByIdAndUpdate(task._id, {
-        $set: {
-          "progress.processed": safeProcessed,
-          "progress.success": successCount,
-          "progress.errors": errorCount,
-          "progress.skipped": skipCount,
-        },
-      }).catch((e) => console.error("save task error:", e));
-      lastSaveTime = now;
-    }
-  };
-
-  // 🔽 پردازش با هم‌روندی ۱ و تأخیر ۵۰۰ms
-  await asyncPool(1, allItems, async ({ item, fileName, index }) => {
-    // 🛑 اجازه تنفس به event loop
-    await new Promise((res) => setTimeout(res, 500));
-    const identifier = `${fileName}[${index}]`;
-    try {
-      const d = item.data || item;
-
-      if (isAdUnavailable(d)) {
-        skipCount++;
-        errorLog.push({
-          row: identifier,
-          index: index + 1,
-          type: "skip",
-          message: "آگهی در منبع اصلی فروخته یا حذف شده است",
-        });
-        processedCount++;
-        await maybeSaveTask();
-        return;
-      }
-
-      const sourceId = getSourceId(item);
-      if (existingSourceIds.has(sourceId)) {
-        skipCount++;
-        errorLog.push({
-          row: identifier,
-          index: index + 1,
-          type: "skip",
-          message: "آگهی تکراری (قبلاً ثبت شده)",
-        });
-        processedCount++;
-        await maybeSaveTask();
-        return;
-      }
-
-      const categoryId = await getCategoryId(
-        d.title || "",
-        d.description || ""
-      );
-      const catId = categoryId || "000000000000000000000000";
-      const adPayload = mapToAdPayload(
-        item,
-        task.userId.toString(),
-        expertPhone,
-        expertName,
-        catId
-      );
-
-      if (!isAdValid(adPayload)) {
-        skipCount++;
-        errorLog.push({
-          row: identifier,
-          index: index + 1,
-          type: "skip",
-          message: "اطلاعات کافی نیست",
-        });
-        processedCount++;
-        await maybeSaveTask();
-        return;
-      }
-
-      if (Array.isArray(adPayload.images) && adPayload.images.length > 0) {
-        adPayload.images = await processAdImages(adPayload.images, index);
-      }
-
-      adDocs.push(adPayload);
-      auditLogDocs.push({
-        userId: task.userId,
-        action: AuditAction.AD_CREATED,
-        resource: "Ad",
-        resourceId: null,
-        description: `کارشناس ${expertName} آگهی فله‌ای «${adPayload.title}» را ایجاد کرد.`,
-        metadata: { source: adPayload.source, originalId: adPayload.sourceId },
-        createdAt: new Date(),
-      });
-      successCount++;
-    } catch (itemErr: any) {
-      errorCount++;
-      errorLog.push({
-        row: identifier,
-        index: index + 1,
-        type: "error",
-        message: itemErr.message,
-      });
-    } finally {
-      processedCount++;
-      await maybeSaveTask();
-    }
-  });
-
-  if (adDocs.length > 0) {
-    const insertedAds = await Ad.insertMany(adDocs, { ordered: false });
-    auditLogDocs.forEach((log, idx) => {
-      if (insertedAds[idx]) log.resourceId = insertedAds[idx]._id;
-    });
-  }
-  if (auditLogDocs.length > 0) {
-    await AuditLog.insertMany(auditLogDocs, { ordered: false });
-  }
-
-  await BulkTask.findByIdAndUpdate(task._id, {
-    $set: {
-      status: "completed",
-      progress: {
-        total: allItems.length,
-        processed: allItems.length,
-        success: successCount,
-        errors: errorCount,
-        skipped: skipCount,
-      },
-      errorLog: errorLog,
-    },
-  });
-
-  await sendNotificationToUser(
-    task.userId.toString(),
-    "تکمیل بارگذاری فله‌ای",
-    `${successCount} آگهی ایجاد شد.${errorCount ? ` (${errorCount} خطا)` : ""}${skipCount ? ` (${skipCount} رد شده)` : ""}`,
-    "info",
-    "/panel/expert/bulk-upload",
-    { success: successCount, errors: errorCount, skipped: skipCount }
-  );
 }

@@ -1,3 +1,4 @@
+// app/(main)/page.tsx
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
@@ -9,6 +10,7 @@ import { locationApi, Province } from "@/services/api/location.api";
 import AdFeed from "@/components/common/AdFeed";
 import { FullPageSpinner } from "@/components/ui/skeletons";
 import { VipPromoCard } from "@/components/common/VipPromoCard";
+import { HeroBanner } from "@/components/home/hero-banner";
 
 // ★ Dynamic imports برای کامپوننت‌های سنگین
 const HeroSection = dynamic(
@@ -69,8 +71,12 @@ function HomePageContent() {
       </div>
 
       <main className="w-full mt-1 md:mt-6 space-y-5 md:space-y-6">
-        {/* بنر اصلی هویج */}
+        {/* بنر اصلی تبادل */}
         <HeroSection />
+
+
+        {/* بنر مشاهده آگهی‌ها */}
+        <HeroBanner />
 
         {/* کارت VIP — فقط موبایل — فقط کاربر عادی/مهمان */}
         {showVipPromo && (
@@ -78,7 +84,7 @@ function HomePageContent() {
             <VipPromoCard
               source="home"
               title="بیشتر دیده شو، سریع‌تر بفروش"
-              description="با اشتراک VIP هویج، آگهی‌هات در صدر نتایج قرار می‌گیرن و به ابزارهای حرفه‌ای دسترسی پیدا می‌کنی."
+              description="با اشتراک VIP تبادل، آگهی‌هات در صدر نتایج قرار می‌گیرن و به ابزارهای حرفه‌ای دسترسی پیدا می‌کنی."
               ctaText="مشاهده پلن‌های VIP"
             />
           </div>

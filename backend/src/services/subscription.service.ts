@@ -1,4 +1,3 @@
-// backend/src/services/subscription.service.ts
 import { Types } from "mongoose";
 import { PaymentGatewayService } from "./paymentGateway.service";
 import { sendNotificationToUser } from "./notification.service";
@@ -10,6 +9,8 @@ import { VipSubscription } from "../models/VipSubscription.model";
 import { createAuditLog } from "./auditLog.service";
 import { AuditAction } from "../models/AuditLog.model";
 import { Request } from "express";
+import { grantPoints } from "./loyalty.service";
+import { LOYALTY_RULES } from "../config/loyalty";
 
 export class SubscriptionService {
   static async getActivePlans(role?: string) {
@@ -110,6 +111,15 @@ export class SubscriptionService {
       role: plan.targetRole || "vip",
       isVip: true,
     });
+
+    // 🆕 اعطای امتیاز خرید اشتراک VIP
+    await grantPoints(
+      sub.user.toString(),
+      LOYALTY_RULES.VIP_PURCHASE,
+      "vip_purchase",
+      "پاداش خرید اشتراک ویژه",
+      { planSlug: plan.slug, amount: plan.price }
+    );
 
     await createAuditLog({
       userId: sub.user.toString(),

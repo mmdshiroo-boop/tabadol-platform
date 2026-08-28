@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { ApiKeyService } from "../services/apiKey.service";
-import { Ad } from "../models/Ad.model";
-import { Settings } from "../models/Settings.model";
-import { MarketPlan } from "../models/MarketPlan.model";
 import { createConsultingRequest } from "../controllers/consulting.controller";
 import {
   getLocationFromIP,
   reverseGeocodeNominatim,
 } from "../controllers/location.controller";
+import { Settings } from "../models/Settings.model";
+import { MarketPlan } from "../models/MarketPlan.model";
+import { Ad } from "../models";
 
 const router = Router();
 

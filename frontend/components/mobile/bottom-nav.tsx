@@ -4,11 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/app/context/AuthContext";
-import { useNotifications } from "@/hooks/useNotifications";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Home, Plus, MessageCircleMore, Bookmark } from "lucide-react";
+import { useNotifications } from "@/hooks/useNotifications";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api";
 

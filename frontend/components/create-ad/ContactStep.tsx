@@ -307,7 +307,7 @@ export function ContactStep({
             htmlFor="terms"
             className="text-xs font-medium text-foreground/90 cursor-pointer leading-relaxed"
           >
-            شرایط و قوانین انتشار آگهی و حریم خصوصی پلتفرم هویج را مطالعه کرده
+            شرایط و قوانین انتشار آگهی و حریم خصوصی پلتفرم تبادل را مطالعه کرده
             و تمام مفاد آن را می‌پذیرم.
           </label>
         </div>

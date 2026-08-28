@@ -17,6 +17,7 @@ import {
   Lock,
   Eye,
   EyeOff,
+  Gift,
 } from "lucide-react";
 import {
   AuthField,
@@ -47,7 +48,7 @@ export function RegisterForm({ onSuccess, onLoginClick }: RegisterFormProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [countdown, setCountdown] = useState(0);
-
+  const [referralCode, setReferralCode] = useState("");
   const { login } = useAuth();
   const router = useRouter();
 
@@ -106,9 +107,9 @@ export function RegisterForm({ onSuccess, onLoginClick }: RegisterFormProps) {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         password,
+        referralCode: referralCode.trim() || undefined, // ✅ ارسال کد معرف
       });
       if (response.success) {
-        // ✅ از متد login در AuthContext استفاده می‌کنیم
         login(response.token, response.data);
 
         toast.success("ثبت‌نام موفق", {
@@ -178,6 +179,23 @@ export function RegisterForm({ onSuccess, onLoginClick }: RegisterFormProps) {
               dir="ltr"
               className={cn(authInputClass, "pr-11")}
               autoFocus
+            />
+          </AuthField>
+
+          {/* ✅ فیلد کد معرف */}
+          <AuthField
+            id="reg-referral"
+            label="کد معرف (اختیاری)"
+            icon={<Gift className="w-4 h-4" />}
+          >
+            <Input
+              id="reg-referral"
+              type="text"
+              value={referralCode}
+              onChange={(e) => setReferralCode(e.target.value)}
+              placeholder="مثلاً A1B2C3D4"
+              dir="ltr"
+              className={cn(authInputClass, "pr-11")}
             />
           </AuthField>
 

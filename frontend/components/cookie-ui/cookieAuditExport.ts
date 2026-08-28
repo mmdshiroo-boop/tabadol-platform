@@ -113,8 +113,7 @@ function statusColor(s: string): string {
 // ═══════════════════════════════════════════════════════════
 export async function exportToPDF(logs: CookieAuditLog[], filename: string) {
   if (!logs || logs.length === 0) {
-    alert("داده‌ای برای خروجی گرفتن وجود ندارد.");
-    return;
+    throw new Error("داده‌ای برای خروجی وجود ندارد");
   }
 
   const html2canvas = (await import("html2canvas")).default;
@@ -140,7 +139,7 @@ export async function exportToPDF(logs: CookieAuditLog[], filename: string) {
   const el = document.createElement("div");
   el.setAttribute("dir", "rtl");
   el.style.cssText = `
-    position: absolute;
+    position: fixed;
     left: -9999px;
     top: 0;
     width: 1350px;
@@ -294,7 +293,7 @@ export async function exportToPDF(logs: CookieAuditLog[], filename: string) {
       backgroundColor: "#ffffff",
     });
 
-    const imgData = canvas.toDataURL("image/jpeg", 0.95);
+    const imgData = canvas.toDataURL("image/png");
     const pdf = new jsPDF({
       orientation: "landscape",
       unit: "mm",
@@ -309,20 +308,22 @@ export async function exportToPDF(logs: CookieAuditLog[], filename: string) {
     let heightLeft = imgHeight;
     let position = 0;
 
-    pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+    // صفحه اول
+    pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
     heightLeft -= pdfHeight;
 
+    // صفحات بعدی
     while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
+      position = -heightLeft; // 🔧 اصلاح اصلی
       pdf.addPage();
-      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
       heightLeft -= pdfHeight;
     }
 
     pdf.save(`${filename}.pdf`);
   } catch (err) {
     console.error("خطا در تولید PDF:", err);
-    alert("خطایی در تولید فایل PDF رخ داد.");
+    throw new Error("خطا در تولید فایل PDF");
   } finally {
     document.body.removeChild(el);
   }
@@ -333,8 +334,7 @@ export async function exportToPDF(logs: CookieAuditLog[], filename: string) {
 // ═══════════════════════════════════════════════════════════
 export async function exportToExcel(logs: CookieAuditLog[], filename: string) {
   if (!logs || logs.length === 0) {
-    alert("داده‌ای برای خروجی گرفتن وجود ندارد.");
-    return;
+    throw new Error("داده‌ای برای خروجی وجود ندارد");
   }
 
   const XLSX = await import("xlsx");
@@ -380,27 +380,26 @@ export async function exportToExcel(logs: CookieAuditLog[], filename: string) {
 
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
 
-  // تنظیم عرض ستون‌ها بر اساس ۱۴ ستون
+  // تنظیم عرض ستون‌ها
   ws["!cols"] = [
-    { wch: 6 }, // ردیف
-    { wch: 24 }, // User ID
-    { wch: 20 }, // نام و نام خانوادگی
-    { wch: 15 }, // شماره تماس
-    { wch: 24 }, // ایمیل
-    { wch: 15 }, // نقش
-    { wch: 18 }, // نوع رویداد
-    { wch: 18 }, // نام کوکی
-    { wch: 28 }, // Session ID
-    { wch: 12 }, // وضعیت
-    { wch: 16 }, // IP
-    { wch: 25 }, // مرورگر
-    { wch: 22 }, // انقضای کوکی
-    { wch: 22 }, // زمان ثبت
+    { wch: 6 },
+    { wch: 24 },
+    { wch: 20 },
+    { wch: 15 },
+    { wch: 24 },
+    { wch: 15 },
+    { wch: 18 },
+    { wch: 18 },
+    { wch: 28 },
+    { wch: 12 },
+    { wch: 16 },
+    { wch: 25 },
+    { wch: 22 },
+    { wch: 22 },
   ];
 
   ws["!views"] = [{ RTL: true }];
 
-  // استایل هدر (در صورت پشتیبانی توسط پکیج)
   for (let c = 0; c < headers.length; c++) {
     const cellRef = XLSX.utils.encode_cell({ r: 0, c });
     if (ws[cellRef]) {

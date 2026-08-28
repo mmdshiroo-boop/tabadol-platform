@@ -1,3 +1,4 @@
+// components/cookie-ui/UserDetailModal.tsx (اصلاح‌شده)
 "use client";
 
 import { useState, useEffect } from "react";
@@ -51,6 +52,7 @@ import {
   LogIn,
   Users,
   Star,
+  FileCode,
   type LucideIcon,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -66,12 +68,14 @@ function formatPrice(price: number) {
   return `${price.toLocaleString("fa-IR")} تومان`;
 }
 
-// ✅ اصلاح تایپ ورودی و خروجی – دیگر null برگردانده نمی‌شود
-const getImageUrl = (img?: string | null): string => {
+// ✅ اصلاح getImageUrl برای پشتیبانی از آرایه images
+const getImageUrl = (img?: string | string[] | null): string => {
   if (!img) return "";
-  if (img.startsWith("http")) return img;
+  const image = Array.isArray(img) ? img[0] : img;
+  if (!image) return "";
+  if (image.startsWith("http")) return image;
   const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
-  return `${base}${img.startsWith("/") ? "" : "/"}${img}`;
+  return `${base}${image.startsWith("/") ? "" : "/"}${image}`;
 };
 
 function formatDate(date: string | Date): string {
@@ -243,7 +247,8 @@ function BehaviorMetric({
 }
 
 function AdCard({ ad, showHeart }: { ad: any; showHeart?: boolean }) {
-  const imgUrl = getImageUrl(ad.image);
+  // ✅ استفاده از images[0] به‌جای ad.image
+  const imgUrl = getImageUrl(ad.images?.[0] || ad.image);
   return (
     <Link href={`/ads/${ad._id}`} target="_blank">
       <motion.div
@@ -412,9 +417,11 @@ function ScoreBreakdownTooltip({
 export default function UserDetailModal({
   userId,
   onClose,
+  onDownloadReport,
 }: {
   userId: string;
   onClose: () => void;
+  onDownloadReport?: (userId: string) => void;
 }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -454,7 +461,7 @@ export default function UserDetailModal({
           <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-primary/10 to-transparent rounded-bl-full" />
 
           <div className="relative p-5 border-b bg-card/50 backdrop-blur-sm">
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between flex-wrap gap-4">
               <div className="flex items-center gap-4">
                 {/* Avatar */}
                 <div className="relative shrink-0">
@@ -535,7 +542,7 @@ export default function UserDetailModal({
                 </div>
               </div>
 
-              {/* Right side: badges + close */}
+              {/* Right side: badges + close + download button */}
               <div className="flex items-center gap-2">
                 {!loading && data && (
                   <div className="hidden sm:flex items-center gap-1.5">
@@ -558,6 +565,15 @@ export default function UserDetailModal({
                   </div>
                 )}
                 <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onDownloadReport?.(userId)}
+                  className="gap-2 rounded-xl text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                >
+                  <FileCode className="w-4 h-4" />
+                  دانلود گزارش
+                </Button>
+                <Button
                   variant="ghost"
                   size="icon"
                   onClick={onClose}
@@ -571,7 +587,7 @@ export default function UserDetailModal({
         </div>
 
         {/* ═══════ Body ═══════ */}
-        <div className="flex flex-1 min-h-0 overflow-hidden">
+        <div className="flex flex-1 min-h-0 overflow-hidden flex-col md:flex-row">
           {loading ? (
             <div className="w-full p-6 space-y-5">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -584,9 +600,9 @@ export default function UserDetailModal({
           ) : data ? (
             <TooltipProvider>
               <>
-                {/* ──── Sidebar ──── */}
-                <div className="w-60 border-l bg-gradient-to-b from-muted/30 to-muted/10 shrink-0 flex flex-col">
-                  <nav className="p-3 space-y-1 flex-1">
+                {/* ──── Sidebar (mobile: horizontal scroll) ──── */}
+                <div className="md:w-60 border-b md:border-b-0 md:border-l bg-gradient-to-b from-muted/30 to-muted/10 shrink-0 flex md:flex-col overflow-x-auto md:overflow-y-auto">
+                  <nav className="p-3 space-y-1 flex-1 flex md:flex-col gap-2">
                     {SIDEBAR_TABS.map((tab) => {
                       const isActive = activeTab === tab.id;
                       const count =
@@ -602,7 +618,7 @@ export default function UserDetailModal({
                           whileHover={{ x: -2 }}
                           whileTap={{ scale: 0.97 }}
                           className={cn(
-                            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 text-right relative overflow-hidden",
+                            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 text-right relative overflow-hidden whitespace-nowrap",
                             isActive
                               ? "text-white shadow-md"
                               : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
@@ -650,8 +666,8 @@ export default function UserDetailModal({
                     })}
                   </nav>
 
-                  {/* Sidebar footer: Engagement Score */}
-                  <div className="p-3 border-t">
+                  {/* Sidebar footer: Engagement Score (hidden on mobile) */}
+                  <div className="p-3 border-t hidden md:block">
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div className="p-3 rounded-xl bg-gradient-to-br from-primary/5 to-transparent border border-primary/10 cursor-help">
@@ -1146,8 +1162,6 @@ export default function UserDetailModal({
                           )}
 
                           <Separator />
-
-                          {/* ══════ تحلیل عمیق رفتار ══════ */}
 
                           {/* پروفایل خریدار/مستاجر */}
                           {data.behavior.buyerProfile && (

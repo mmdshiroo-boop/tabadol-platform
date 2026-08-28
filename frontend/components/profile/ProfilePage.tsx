@@ -1,3 +1,4 @@
+// profile-menu/page.tsx
 "use client";
 
 import { useEffect, useState, useRef } from "react";
@@ -11,6 +12,7 @@ import { getImageUrl } from "@/lib/getImageUrl";
 import { motion } from "framer-motion";
 import apiClient from "@/services/api/client";
 import { VipPromoCard } from "@/components/common/VipPromoCard";
+import { FollowListModal } from "@/components/follow/FollowListModal";
 import {
   LayoutDashboard,
   FileText,
@@ -184,12 +186,32 @@ export default function ProfilePage() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
 
+  // 🆕 state مربوط به فالو
+  const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
+  const [followModal, setFollowModal] = useState<{ open: boolean; type: "followers" | "following" }>({
+    open: false,
+    type: "followers",
+  });
+
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [avatarKey, setAvatarKey] = useState(Date.now());
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!authUser?._id) return;
+    const fetchFollowCounts = async () => {
+      try {
+        const res = await apiClient.get(`/follow/counts/${authUser._id}`);
+        setFollowCounts(res.data.data);
+      } catch (error) {
+        console.error("Error fetching follow counts:", error);
+      }
+    };
+    fetchFollowCounts();
+  }, [authUser?._id]);
 
   useEffect(() => {
     if (document.documentElement.classList.contains("dark")) {
@@ -360,6 +382,32 @@ export default function ProfilePage() {
               اطلاعات حساب کاربری خود را مدیریت کنید
             </p>
           </div>
+        </div>
+      </motion.div>
+
+      {/* 🆕 کارت دنبال‌کننده‌ها / دنبال‌شونده‌ها */}
+      <motion.div
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.08 }}
+        className="mb-6 rounded-3xl border border-border/60 bg-card/80 backdrop-blur-xl p-4 shadow-lg shadow-black/5"
+      >
+        <div className="flex items-center justify-around text-center">
+          <button
+            onClick={() => setFollowModal({ open: true, type: "followers" })}
+            className="flex-1 hover:bg-muted/40 rounded-2xl p-3 transition-colors"
+          >
+            <p className="text-2xl font-black text-foreground">{followCounts.followers}</p>
+            <p className="text-xs text-muted-foreground mt-1">فالوور</p>
+          </button>
+          <div className="w-px h-8 bg-border/60" />
+          <button
+            onClick={() => setFollowModal({ open: true, type: "following" })}
+            className="flex-1 hover:bg-muted/40 rounded-2xl p-3 transition-colors"
+          >
+            <p className="text-2xl font-black text-foreground">{followCounts.following}</p>
+            <p className="text-xs text-muted-foreground mt-1">دنبال‌شونده</p>
+          </button>
         </div>
       </motion.div>
 
@@ -655,6 +703,16 @@ export default function ProfilePage() {
           </button>
         </div>
       </motion.div>
+
+      {/* 🆕 مودال لیست فالوور/دنبال‌شونده */}
+      {authUser && (
+        <FollowListModal
+          open={followModal.open}
+          onClose={() => setFollowModal({ ...followModal, open: false })}
+          userId={authUser._id}
+          type={followModal.type}
+        />
+      )}
     </motion.div>
   );
 }

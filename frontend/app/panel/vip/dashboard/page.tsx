@@ -23,9 +23,10 @@ import { vipApi } from "@/services/api/vip.api";
 import type { VipStats } from "@/types";
 import apiClient from "@/services/api/client";
 import { toast } from "sonner";
-import { getImageUrl } from "@/lib/getImageUrl"; // ✅ helper مرکزی
+import { getImageUrl } from "@/lib/getImageUrl";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import LoyaltyStatusCard from "@/components/loyalty/LoyaltyStatusCard"; // ✅
 
 const formatMoney = (value: number) => {
   if (!value) return "—";
@@ -62,8 +63,6 @@ export default function VipDashboardPage() {
   const [recentAds, setRecentAds] = useState<any[]>([]);
   const [adsLoading, setAdsLoading] = useState(true);
 
-  // ❌ تابع getImageUrl محلی حذف شد – از helper مرکزی استفاده می‌کنیم
-
   const fetchData = async () => {
     setLoading(true);
     setError(false);
@@ -93,6 +92,7 @@ export default function VipDashboardPage() {
     return (
       <div className="space-y-6 px-3 sm:px-6" dir="rtl">
         <Skeleton className="h-20 rounded-2xl" />
+        <Skeleton className="h-28 rounded-2xl" /> {/* برای کارت باشگاه */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
             <Skeleton key={i} className="h-32 sm:h-36 rounded-2xl" />
@@ -167,6 +167,11 @@ export default function VipDashboardPage() {
             {stats?.isVip ? "طرح ویژه فعال" : "کاربر ویژه"}
           </Badge>
         </div>
+      </motion.div>
+
+      {/* کارت باشگاه مشتریان */}
+      <motion.div variants={itemVariants}>
+        <LoyaltyStatusCard />
       </motion.div>
 
       {/* KPI Cards */}

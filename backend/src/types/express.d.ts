@@ -1,4 +1,4 @@
-import { IUser } from '../models/User.model'; // مسیر را مطابق پروژه تنظیم کن
+import { IUser } from '../routes/models/User.model'; // مسیر را مطابق پروژه تنظیم کن
 import { UploadedFile } from 'express-fileupload';
 
 declare global {

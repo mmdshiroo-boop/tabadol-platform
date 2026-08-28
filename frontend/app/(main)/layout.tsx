@@ -8,7 +8,7 @@ import { Footer } from "@/components/common/Footer";
 import { BottomNav } from "@/components/mobile/bottom-nav";
 import { Header } from "@/components/common/header";
 import { MobileHeader } from "@/components/mobile/mobile-header";
-import { useLocationTracking } from "@/hooks/useLocationTracking";
+import { useLocationTracking } from "../../hooks/useLocationTracking";
 
 export default function MainLayout({
   children,

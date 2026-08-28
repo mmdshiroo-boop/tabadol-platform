@@ -39,7 +39,8 @@ import {
 } from "lucide-react";
 import apiClient from "@/services/api/client";
 import { toast } from "sonner";
-import { getImageUrl } from "@/lib/getImageUrl"; // ✅ helper مرکزی تصاویر
+import { getImageUrl } from "@/lib/getImageUrl";
+import LoyaltyStatusCard from "@/components/loyalty/LoyaltyStatusCard"; // ✅
 
 // ─── TYPES ────────────────────────────────
 interface Ad {
@@ -79,8 +80,6 @@ const formatDate = (date: string) =>
     day: "numeric",
   });
 
-// ❌ تابع getImageUrl محلی حذف شد — از helper مرکزی استفاده می‌کنیم
-
 const containerVariants = {
   hidden: { opacity: 0 },
   show: { opacity: 1, transition: { staggerChildren: 0.05 } },
@@ -98,7 +97,7 @@ const itemVariants: Variants = {
     },
   },
 };
-// ─── CUSTOM TOOLTIP FOR RECHARTS ──────────
+
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
@@ -285,6 +284,11 @@ export default function UserDashboardPage() {
         </motion.div>
       </div>
 
+      {/* کارت باشگاه مشتریان */}
+      <motion.div variants={itemVariants}>
+        <LoyaltyStatusCard />
+      </motion.div>
+
       {/* کارت‌های آماری اصلی */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <motion.div variants={itemVariants}>
@@ -459,13 +463,12 @@ export default function UserDashboardPage() {
           ) : (
             <div className="space-y-3">
               {recentAds.map((ad) => {
-                const imgUrl = getImageUrl(ad.images?.[0]); // ✅ helper مرکزی
+                const imgUrl = getImageUrl(ad.images?.[0]);
                 return (
                   <div
                     key={ad._id}
                     className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3.5 rounded-xl bg-card hover:bg-muted/40 border border-border/40 transition-all gap-3.5 shadow-sm"
                   >
-                    {/* تصویر و عنوان آگهی */}
                     <div className="flex items-center gap-3.5 min-w-0 flex-1 w-full sm:w-auto">
                       <div className="relative w-16 h-16 sm:w-20 sm:h-16 rounded-xl overflow-hidden shrink-0 bg-muted border border-border/50 flex items-center justify-center">
                         {imgUrl ? (
@@ -504,7 +507,6 @@ export default function UserDashboardPage() {
                       </div>
                     </div>
 
-                    {/* قیمت و وضعیت */}
                     <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center w-full sm:w-auto shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-border/40 gap-1.5">
                       <p className="font-black text-primary text-sm sm:text-base">
                         {formatPrice(ad.price)}

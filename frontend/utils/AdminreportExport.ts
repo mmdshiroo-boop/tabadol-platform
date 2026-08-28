@@ -20,9 +20,8 @@ function toPersianNum(num?: number): string {
 export function downloadExcel(stats: AdminPanelStats) {
   const persianDate = getPersianDate();
 
-  // ساخت آرایه داده‌ها (درج اعداد به صورت عددی برای پشتیبانی از فرمول‌نویسی در اکسل)
   const data = [
-    ["📊 گزارش جامع سیستم", ""],
+    ["📊 گزارش جامع سیستم تبادل", ""],
     ["", ""],
     ["تاریخ تهیه:", persianDate],
     ["", ""],
@@ -44,21 +43,15 @@ export function downloadExcel(stats: AdminPanelStats) {
   ];
 
   const ws = XLSX.utils.aoa_to_sheet(data);
-
-  // تنظیم عرض ستون‌ها
   ws["!cols"] = [{ wch: 32 }, { wch: 20 }];
 
   const wb = XLSX.utils.book_new();
-
-  // 💡 تنظیم راست‌چین‌سازی نیتیو برای شیت اکسل
-  wb.Workbook = {
-    Views: [{ RTL: true }],
-  };
+  wb.Workbook = { Views: [{ RTL: true }] };
 
   XLSX.utils.book_append_sheet(wb, ws, "گزارش سیستم");
 
   const dateStr = new Date().toLocaleDateString("fa-IR").replace(/\//g, "-");
-  const fileName = `گزارش-سیستم-${dateStr}.xlsx`;
+  const fileName = `گزارش-سیستم-تبادل-${dateStr}.xlsx`;
 
   XLSX.writeFile(wb, fileName);
 }
@@ -67,7 +60,7 @@ export function downloadExcel(stats: AdminPanelStats) {
 export function downloadPDF(stats: AdminPanelStats) {
   const persianDate = getPersianDate();
   const dateStr = new Date().toLocaleDateString("fa-IR").replace(/\//g, "-");
-  const pageTitle = `گزارش-جامع-سیستم-${dateStr}`;
+  const pageTitle = `گزارش-جامع-سیستم-تبادل-${dateStr}`;
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -101,20 +94,14 @@ export function downloadPDF(stats: AdminPanelStats) {
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 10px;
+          gap: 12px;
           margin-bottom: 8px;
         }
 
         .logo-icon {
-          width: 44px;
-          height: 44px;
-          background: linear-gradient(135deg, #f97316, #ea580c);
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #ffffff;
-          font-size: 22px;
+          width: 60px;
+          height: 60px;
+          object-fit: contain;
         }
 
         h1 {
@@ -129,116 +116,33 @@ export function downloadPDF(stats: AdminPanelStats) {
           margin-top: 6px;
         }
 
-        .section {
-          margin-bottom: 24px;
-        }
-
-        .section-title {
-          font-size: 15px;
-          font-weight: 700;
-          color: #ea580c;
-          border-right: 4px solid #f97316;
-          padding-right: 10px;
-          margin-bottom: 14px;
-        }
-
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 12px;
-          margin-bottom: 16px;
-        }
-
-        .stat-card {
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          border-radius: 12px;
-          padding: 14px 18px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-
-        .stat-label {
-          font-size: 13px;
-          color: #64748b;
-        }
-
-        .stat-value {
-          font-size: 20px;
-          font-weight: 700;
-          color: #0f172a;
-        }
-
-        .stat-card.highlight {
-          background: linear-gradient(135deg, #f97316, #ea580c);
-          border: none;
-          color: #ffffff;
-        }
-
-        .stat-card.highlight .stat-label,
-        .stat-card.highlight .stat-value {
-          color: #ffffff;
-        }
-
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 13px;
-        }
-
-        th {
-          background: #f97316;
-          color: #ffffff;
-          padding: 10px 14px;
-          text-align: right;
-          font-weight: 600;
-        }
-
-        td {
-          padding: 10px 14px;
-          border-bottom: 1px solid #e2e8f0;
-          text-align: right;
-        }
-
-        tr:nth-child(even) td {
-          background: #f8fafc;
-        }
-
-        .badge {
-          display: inline-block;
-          padding: 3px 10px;
-          border-radius: 20px;
-          font-size: 11px;
-          font-weight: 600;
-        }
-
+        .section { margin-bottom: 24px; }
+        .section-title { font-size: 15px; font-weight: 700; color: #ea580c; border-right: 4px solid #f97316; padding-right: 10px; margin-bottom: 14px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
+        .stat-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; }
+        .stat-label { font-size: 13px; color: #64748b; }
+        .stat-value { font-size: 20px; font-weight: 700; color: #0f172a; }
+        .stat-card.highlight { background: linear-gradient(135deg, #f97316, #ea580c); border: none; color: #ffffff; }
+        .stat-card.highlight .stat-label, .stat-card.highlight .stat-value { color: #ffffff; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { background: #f97316; color: #ffffff; padding: 10px 14px; text-align: right; font-weight: 600; }
+        td { padding: 10px 14px; border-bottom: 1px solid #e2e8f0; text-align: right; }
+        tr:nth-child(even) td { background: #f8fafc; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
         .badge-orange { background: #fff7ed; color: #ea580c; border: 1px solid #fed7aa; }
         .badge-green { background: #dcfce7; color: #15803d; }
         .badge-yellow { background: #fef9c3; color: #a16207; }
         .badge-red { background: #fee2e2; color: #b91c1c; }
-
-        .footer {
-          margin-top: 36px;
-          text-align: center;
-          font-size: 11px;
-          color: #94a3b8;
-          border-top: 1px solid #e2e8f0;
-          padding-top: 14px;
-        }
-
-        @media print {
-          body { padding: 10mm; }
-          @page { size: A4; margin: 10mm; }
-        }
+        .footer { margin-top: 36px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 14px; }
+        @media print { body { padding: 10mm; } @page { size: A4; margin: 10mm; } }
       </style>
     </head>
     <body>
 
       <div class="header">
         <div class="logo-bar">
-          <div class="logo-icon">📊</div>
-          <h1>گزارش جامع سیستم</h1>
+          <img src="/images/tabadol-logo-light.PNG" alt="تبادل" class="logo-icon" />
+          <h1>گزارش جامع سیستم تبادل</h1>
         </div>
         <p class="meta">تاریخ تهیه: ${persianDate}</p>
       </div>
@@ -334,7 +238,7 @@ export function downloadPDF(stats: AdminPanelStats) {
       </div>
 
       <div class="footer">
-        این گزارش به صورت خودکار توسط سیستم مدیریت تهیه شده است
+        این گزارش به صورت خودکار توسط سامانه تبادل تهیه شده است
         &nbsp;|&nbsp; ${persianDate}
       </div>
 
@@ -353,7 +257,6 @@ export function downloadPDF(stats: AdminPanelStats) {
   printWindow.document.write(htmlContent);
   printWindow.document.close();
 
-  // 💡 انتظار هوشمند برای لود کامل فونت‌ها قبل از باز شدن دیالوگ پرینت
   printWindow.onload = () => {
     if (printWindow.document.fonts) {
       printWindow.document.fonts.ready.then(() => {

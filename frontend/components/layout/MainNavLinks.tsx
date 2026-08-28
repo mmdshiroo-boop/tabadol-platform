@@ -14,7 +14,6 @@ import {
   Shield,
   AlertTriangle,
   BookOpen,
-  FileText,
   Info,
 } from "lucide-react";
 

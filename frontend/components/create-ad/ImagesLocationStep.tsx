@@ -1,16 +1,9 @@
 "use client";
-import { getCityCoords } from "@/lib/cityCoordinates";
+
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { CreateAdData } from "@/services/api/ads.api";
 import {
   ChevronLeft,
@@ -20,17 +13,17 @@ import {
   Loader2,
   Image as ImageIcon,
   MapPin,
-  MapPinned,
-  Home,
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
 import {
-  PROVINCES,
-  CITIES,
-} from "@/lib/iranLocations";
+  IranLocationSelector,
+  SelectedLocation,
+} from "@/components/ui/IranLocationSelector";
+import { getById } from "@/lib/iranDivisions";
+import { getCityCoords } from "@/lib/cityCoordinates";
 
 const LocationPickerMap = dynamic(() => import("./LocationPickerMap"), {
   ssr: false,
@@ -67,26 +60,12 @@ export function ImagesLocationStep({
 }: ImagesLocationStepProps) {
   const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [selectedProvinceId, setSelectedProvinceId] = useState<string>("");
-const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({
-  lat: data.latitude || 35.6892,
-  lng: data.longitude || 51.3890,
-});
-const [mapKey, setMapKey] = useState(0);
-  // اگر data.province از قبل وجود داشت، dropdown استان sync شود
-  useEffect(() => {
-    if (!data.province) return;
-
-    const foundProvince = PROVINCES.find((p) => p.name === data.province);
-    if (foundProvince) {
-      setSelectedProvinceId(String(foundProvince.id));
-    }
-  }, [data.province]);
-
-  const filteredCities = useMemo(() => {
-    if (!selectedProvinceId) return [];
-    return CITIES.filter((c) => c.province_id === Number(selectedProvinceId));
-  }, [selectedProvinceId]);
+  const [location, setLocation] = useState<SelectedLocation>({});
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({
+    lat: data.latitude || 35.6892,
+    lng: data.longitude || 51.3890,
+  });
+  const [mapKey, setMapKey] = useState(0);
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -95,11 +74,11 @@ const [mapKey, setMapKey] = useState(0);
       newErrors.images = "حداقل یک تصویر برای آگهی الزامی است";
     }
 
-    if (!selectedProvinceId) {
+    if (!location.provinceId) {
       newErrors.province = "انتخاب استان الزامی است";
     }
 
-    if (!data.city) {
+    if (!location.countyId) {
       newErrors.city = "انتخاب شهر الزامی است";
     }
 
@@ -173,43 +152,39 @@ const [mapKey, setMapKey] = useState(0);
     updateData({ latitude: lat, longitude: lng });
   };
 
-const handleProvinceChange = (val: string) => {
-  setSelectedProvinceId(val);
+  const handleLocationChange = (newLocation: SelectedLocation) => {
+    setLocation(newLocation);
 
-  const provinceName = PROVINCES.find((p) => String(p.id) === val)?.name || "";
+    if (newLocation.provinceId) {
+      const provinceName = getById(newLocation.provinceId)?.Name || "";
+      updateData({ province: provinceName, city: "" });
+    } else {
+      updateData({ province: "", city: "" });
+    }
 
-  updateData({ province: provinceName, city: "" });
+    if (newLocation.countyId) {
+      const cityName = getById(newLocation.countyId)?.Name || "";
+      updateData({ city: cityName });
 
-  // نقشه رو نرم ببر به مرکز استان
-  const coords = getCityCoords("", Number(val));
-  setMapCenter(coords);
+      // انتقال مرکز نقشه به مختصات تقریبی شهر
+      const coords = getCityCoords(cityName, Number(newLocation.provinceId));
+      setMapCenter(coords);
+      setMapKey((prev) => prev + 1);
+    } else {
+      updateData({ city: "" });
+    }
 
-  setErrors((prev) => {
-    const next = { ...prev };
-    delete next.province;
-    delete next.city;
-    return next;
-  });
-};
-
-const handleCityChange = (val: string) => {
-  updateData({ city: val });
-
-  // نقشه رو ببر به مختصات شهر انتخاب‌شده
-  const coords = getCityCoords(val, Number(selectedProvinceId));
-  setMapCenter(coords);
-  setMapKey((prev) => prev + 1); // force re-mount نقشه
-
-  setErrors((prev) => {
-    const next = { ...prev };
-    delete next.city;
-    return next;
-  });
-};
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (newLocation.provinceId) delete next.province;
+      if (newLocation.countyId) delete next.city;
+      return next;
+    });
+  };
 
   return (
     <div className="space-y-8" dir="rtl">
-      {/* ───────────────── تصاویر ───────────────── */}
+      {/* تصاویر */}
       <div className="space-y-3">
         <Label className="text-sm font-bold flex items-center gap-1.5">
           <ImageIcon className="w-4 h-4 text-muted-foreground" />
@@ -217,7 +192,6 @@ const handleCityChange = (val: string) => {
         </Label>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {/* دکمه آپلود */}
           <label
             className={cn(
               "flex flex-col items-center justify-center aspect-square",
@@ -234,16 +208,13 @@ const handleCityChange = (val: string) => {
               ) : (
                 <Upload className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
               )}
-
               <span className="text-xs font-bold text-foreground/70">
                 {uploading ? "آپلود..." : "افزودن عکس"}
               </span>
-
               <span className="text-[10px] text-muted-foreground hidden sm:block">
                 حداکثر ۵ مگابایت
               </span>
             </div>
-
             <input
               type="file"
               className="hidden"
@@ -254,7 +225,6 @@ const handleCityChange = (val: string) => {
             />
           </label>
 
-          {/* تصاویر آپلود شده */}
           {data.images?.map((img: string, idx: number) => (
             <div
               key={idx}
@@ -268,14 +238,12 @@ const handleCityChange = (val: string) => {
                   (e.target as HTMLImageElement).src = "/placeholder.jpg";
                 }}
               />
-
               {idx === 0 && (
                 <div className="absolute bottom-1.5 right-1.5 bg-background/90 backdrop-blur-sm text-[10px] font-black text-primary px-2 py-0.5 rounded-lg border border-primary/20 flex items-center gap-1">
                   <ImageIcon className="w-3 h-3" />
                   تصویر اصلی
                 </div>
               )}
-
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                 <Button
                   type="button"
@@ -294,129 +262,29 @@ const handleCityChange = (val: string) => {
         {errors.images && (
           <p className="text-xs font-bold text-destructive">{errors.images}</p>
         )}
-
-        <p className="text-[11px] text-muted-foreground">
-          اولین تصویر به عنوان تصویر اصلی آگهی نمایش داده می‌شود.
-        </p>
       </div>
 
-      {/* ───────────────── موقعیت مکانی ───────────────── */}
+      {/* موقعیت مکانی */}
       <div className="space-y-5 pt-2 border-t border-border/40">
         <Label className="text-sm font-bold flex items-center gap-1.5">
           <MapPin className="w-4 h-4 text-muted-foreground" />
           موقعیت مکانی آگهی
         </Label>
 
-        {/* استان و شهر */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* استان */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold text-muted-foreground flex items-center gap-1.5">
-              <MapPinned className="w-3.5 h-3.5" />
-              استان <span className="text-destructive">*</span>
-            </Label>
-
-            <Select value={selectedProvinceId} onValueChange={handleProvinceChange}>
-              <SelectTrigger
-                className={cn(
-                  "h-11 sm:h-12 rounded-2xl bg-background border-border",
-                  "text-sm font-medium shadow-sm",
-                  "px-3",
-                  errors.province && "border-destructive/60 focus:ring-destructive/20",
-                )}
-              >
-                <SelectValue placeholder="انتخاب استان" />
-              </SelectTrigger>
-
-              <SelectContent
-                className={cn(
-                  "rounded-2xl border-border shadow-xl",
-                  "max-h-[280px] overflow-hidden",
-                  "[&_[data-radix-select-viewport]]:max-h-[280px]",
-                  "[&_[data-radix-select-viewport]]:overflow-y-auto",
-                )}
-                position="popper"
-                sideOffset={8}
-              >
-                {PROVINCES.map((province) => (
-                  <SelectItem
-                    key={province.id}
-                    value={String(province.id)}
-                    className="text-sm py-2.5 rounded-lg"
-                  >
-                    {province.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {errors.province && (
-              <p className="text-xs font-bold text-destructive">
-                {errors.province}
-              </p>
-            )}
-          </div>
-
-          {/* شهر */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold text-muted-foreground flex items-center gap-1.5">
-              <Home className="w-3.5 h-3.5" />
-              شهر <span className="text-destructive">*</span>
-            </Label>
-
-            <Select
-              value={data.city || ""}
-              onValueChange={handleCityChange}
-              disabled={!selectedProvinceId}
-            >
-              <SelectTrigger
-                className={cn(
-                  "h-11 sm:h-12 rounded-2xl bg-background border-border",
-                  "text-sm font-medium shadow-sm px-3",
-                  !selectedProvinceId && "opacity-70",
-                  errors.city && "border-destructive/60 focus:ring-destructive/20",
-                )}
-              >
-                <SelectValue
-                  placeholder={
-                    selectedProvinceId
-                      ? "انتخاب شهر"
-                      : "ابتدا استان را انتخاب کنید"
-                  }
-                />
-              </SelectTrigger>
-
-              <SelectContent
-                className={cn(
-                  "rounded-2xl border-border shadow-xl",
-                  "max-h-[280px] overflow-hidden",
-                  "[&_[data-radix-select-viewport]]:max-h-[280px]",
-                  "[&_[data-radix-select-viewport]]:overflow-y-auto",
-                )}
-                position="popper"
-                sideOffset={8}
-              >
-                {filteredCities.map((city) => (
-                  <SelectItem
-                    key={city.id}
-                    value={city.name}
-                    className="text-sm py-2.5 rounded-lg"
-                  >
-                    {city.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {errors.city && (
-              <p className="text-xs font-bold text-destructive">
-                {errors.city}
-              </p>
-            )}
-          </div>
+        <div className="space-y-3">
+          <IranLocationSelector
+            value={location}
+            onChange={handleLocationChange}
+            showOptionalDistrict={false}
+          />
+          {errors.province && (
+            <p className="text-xs font-bold text-destructive">{errors.province}</p>
+          )}
+          {errors.city && (
+            <p className="text-xs font-bold text-destructive">{errors.city}</p>
+          )}
         </div>
 
-        {/* محله و آدرس */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label className="text-xs font-bold text-muted-foreground">
@@ -429,7 +297,6 @@ const handleCityChange = (val: string) => {
               className="h-11 sm:h-12 rounded-2xl text-sm shadow-sm"
             />
           </div>
-
           <div className="space-y-1.5">
             <Label className="text-xs font-bold text-muted-foreground">
               آدرس دقیق (اختیاری)
@@ -443,22 +310,20 @@ const handleCityChange = (val: string) => {
           </div>
         </div>
 
-        {/* نقشه */}
         <div className="space-y-3">
           <Label className="text-sm font-bold flex items-center gap-1.5">
             <MapPin className="w-4 h-4 text-primary" />
             موقعیت دقیق روی نقشه (اختیاری)
           </Label>
-        <LocationPickerMap
-  key={`map-${mapKey}`}
-  initialLat={mapCenter.lat}
-  initialLng={mapCenter.lng}
-  onLocationSelect={handleLocationSelect}
-/>
+          <LocationPickerMap
+            key={`map-${mapKey}`}
+            initialLat={mapCenter.lat}
+            initialLng={mapCenter.lng}
+            onLocationSelect={handleLocationSelect}
+          />
         </div>
       </div>
 
-      {/* دکمه‌ها */}
       <div className="flex justify-between items-center pt-6 border-t border-border/40">
         <Button
           variant="outline"
@@ -468,7 +333,6 @@ const handleCityChange = (val: string) => {
           <ChevronRight className="w-4 h-4" />
           مرحله قبل
         </Button>
-
         <Button
           onClick={() => validate() && onNext()}
           className="gap-2 rounded-xl h-10 px-6 text-sm font-bold bg-primary"

@@ -10,7 +10,7 @@ import {
   BotConfig,
   BotPlatform,
   IBotSubscriber,
-} from "../.././../../models/bot.model";
+} from "../../../../models/bot.model";
 import {
   botService,
   BotAdResult,

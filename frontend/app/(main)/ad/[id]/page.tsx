@@ -17,8 +17,9 @@ import { AdInfoCard } from "@/components/ad/AdInfoCard";
 import AdImageGallery from "@/components/ad/AdGallery";
 import { AdBreadcrumb } from "@/components/ad/AdBreadcrumb";
 import { AdActions } from "@/components/ad/AdActions";
-import { AdMap } from "@/components/ad/AdMap";
-import { getImageUrl } from "@/lib/getImageUrl"; // ✅ helper مرکزی تصاویر
+import { getImageUrl } from "@/lib/getImageUrl";
+import { printSingleAd, mapBackendAdToPrintAd } from "@/lib/printAds";
+import { AdMaps } from "@/components/ad/AdMaps";
 
 interface AdDetail {
   _id: string;
@@ -107,21 +108,26 @@ export default function AdDetailPage() {
     }
   };
 
-  const handleShare = async () => {
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: ad?.title || "مشاهده آگهی",
-          url: window.location.href,
-        });
-      } else {
-        await navigator.clipboard.writeText(window.location.href);
-        toast.success("لینک آگهی کپی شد");
-      }
-    } catch {
-      toast.error("خطا در اشتراک‌گذاری");
+ const handleShare = async () => {
+  try {
+    if (navigator.share) {
+      await navigator.share({
+        title: ad?.title || "مشاهده آگهی",
+        url: window.location.href,
+      });
+    } else {
+      await navigator.clipboard.writeText(window.location.href);
+      toast.success("لینک آگهی کپی شد");
     }
-  };
+
+    // ✅ ثبت امتیاز اشتراک‌گذاری (اگر کاربر وارد شده باشد)
+    if (adId) {
+      await apiClient.post(`/ads/${adId}/share`);
+    }
+  } catch (error) {
+    toast.error("خطا در اشتراک‌گذاری");
+  }
+};
 
   const handleReport = () => toast.info("گزارش تخلف ثبت شد");
 
@@ -180,7 +186,7 @@ export default function AdDetailPage() {
       >
         {ad.images && ad.images.length > 0 ? (
           <img
-            src={getImageUrl(ad.images[imgIdx] || "/placeholder.jpg")} // ✅ helper مرکزی
+            src={getImageUrl(ad.images[imgIdx] || "/placeholder.jpg")}
             alt={ad.title}
             className="w-full h-full object-cover"
           />
@@ -254,7 +260,6 @@ export default function AdDetailPage() {
             >
               <ChevronLeft size={20} />
             </button>
-            {/* نشانگرهای دایره‌ای نارنجی */}
             <div className="absolute bottom-3 left-0 right-0 flex justify-center items-center gap-2 z-10">
               {ad.images.map((_, idx) => (
                 <div
@@ -267,14 +272,14 @@ export default function AdDetailPage() {
         )}
       </div>
 
-      <div className="px-4 mt-3">
-        <AdBreadcrumb
-          cityName={ad.city}
-          citySlug={ad.city}
-          categories={ad.category ? [ad.category] : []}
-          adTitle={ad.title}
-        />
-      </div>
+<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-3 flex justify-center">
+  <AdBreadcrumb
+    cityName={ad.city}
+    citySlug={ad.city}
+    categories={ad.category ? [ad.category] : []}
+    adTitle={ad.title}
+  />
+</div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-7 mt-4">
         <div className="lg:col-span-2 space-y-5">
@@ -325,10 +330,11 @@ export default function AdDetailPage() {
             adId={ad._id}
             sellerUserId={ad.userId?._id}
             sourceUrl={ad.sourceUrl}
+            adData={ad}
           />
 
           {hasCoordinates ? (
-            <AdMap
+            <AdMaps
               city={ad.city}
               district={ad.district}
               address={ad.address}

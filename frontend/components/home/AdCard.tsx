@@ -14,7 +14,8 @@ import {
   HiChevronLeft,
 } from "react-icons/hi2";
 import { ImageOff, MapPin, Tag, Crown, Image as ImageIcon } from "lucide-react";
-import { getImageUrl } from "@/lib/getImageUrl"; // ✅ helper مرکزی
+import { getImageUrl } from "@/lib/getImageUrl";
+import VerifiedBadge from "@/components/common/VerifiedBadge"; // ✅ اضافه شد
 
 export interface AdCardProps {
   _id: string;
@@ -63,8 +64,6 @@ const AD_TYPE_CONFIG: Record<
 
 const PERSIAN_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
 const toFa = (n: number) => String(n).replace(/\d/g, (d) => PERSIAN_DIGITS[+d]);
-
-// ❌ تابع getImageUrl محلی حذف شد
 
 const formatRelativeDate = (dateString: string): string => {
   if (!dateString) return "";
@@ -198,7 +197,8 @@ export function AdCard({
   const timeStr = formatRelativeDate(createdAt);
 
   return (
-<Link href={`/ad/${_id}`} className="block group h-full flex flex-col">      <div
+    <Link href={`/ad/${_id}`} className="block group h-full flex flex-col">
+      <div
         dir="rtl"
         className="flex flex-col h-full rounded-2xl border border-border/50 bg-card
                    shadow-sm hover:shadow-md hover:border-border transition-all duration-300 overflow-hidden
@@ -220,7 +220,7 @@ export function AdCard({
                 initial="initial"
                 animate="animate"
                 exit="exit"
-                src={getImageUrl(images[imgIndex])} // ✅ helper مرکزی
+                src={getImageUrl(images[imgIndex])}
                 alt={title}
                 className="absolute inset-0 w-full h-full object-cover"
                 draggable={false}
@@ -258,8 +258,8 @@ export function AdCard({
               </span>
             )}
             {isVerified && (
-              <span className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-lg shadow-emerald-600/20">
-                تایید شده
+              <span className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-lg shadow-emerald-600/20 flex items-center gap-1">
+                <VerifiedBadge size="sm" className="text-white" /> تایید شده
               </span>
             )}
             {userRole === "vip" && (

@@ -7,7 +7,8 @@ import { User } from "../models/User.model";
 import { sendNotificationToUser } from "../services/notification.service";
 import { createAuditLog } from "../services/auditLog.service";
 import { AuditAction } from "../models/AuditLog.model";
-
+import { grantPointsIfNotGranted } from "../services/loyalty.service";
+import { LOYALTY_RULES } from "../config/loyalty";
 export const addComment = async (req: AuthRequest, res: Response) => {
   try {
     const { adId, content, parentId } = req.body;
@@ -17,7 +18,19 @@ export const addComment = async (req: AuthRequest, res: Response) => {
     if (parentId) commentData.parent = parentId;
 
     const comment = await Comment.create(commentData);
-
+    // 🆕 اعطای امتیاز ثبت نظر (فقط یک بار برای هر آگهی)
+    try {
+    await grantPointsIfNotGranted(
+  userId.toString(),
+  LOYALTY_RULES.COMMENT,
+  `comment_${adId}`,
+  "ثبت نظر",
+  { adId }
+);
+  
+} catch (pointError) {
+  console.error("Error granting points for comment:", pointError);
+}
     // اعلان به صاحب آگهی
     const ad = await Ad.findById(adId).lean();
     if (ad && ad.userId && ad.userId.toString() !== userId.toString()) {

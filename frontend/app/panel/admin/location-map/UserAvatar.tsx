@@ -1,4 +1,3 @@
-// components/UserAvatar.tsx
 "use client";
 
 import React from "react";
@@ -24,7 +23,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
 }) => {
   // رنگ‌بندی طبق منطق شما
   let borderColor = isOnline ? "#10B981" : "#94A3B8"; // سبز یا خاکستری
-  if (isSelected) borderColor = "#EA580C"; // نارنجی برند هویج
+  if (isSelected) borderColor = "#EA580C"; // نارنجی برند تبادل
   if (isVip) borderColor = "#8B5CF6"; // بنفش VIP
 
   // سایز آواتار

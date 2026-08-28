@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
 import L from "leaflet";
 import Link from "next/link";
@@ -13,18 +13,16 @@ import {
   Eye,
   Calendar,
   Navigation,
-  ChevronLeft,
   Tag,
   Ruler,
   BedDouble,
   Building2,
   Hash,
 } from "lucide-react";
-// ❌ حذف import قدیمی: import type { MapAdItem } from "@/services/api/superAdminMarketAnalysis";
-import { MapAdItem as BaseMapAdItem } from "@/types"; // ✅ فقط از تایپ مرکزی
+import { MapAdItem as BaseMapAdItem } from "@/types";
 import "leaflet/dist/leaflet.css";
 
-// ✨ گسترش تایپ با فیلدهای اضافی که در این کامپوننت نیاز است
+// گسترش تایپ
 interface MapAdItem extends BaseMapAdItem {
   status?: string;
   isVip?: boolean;
@@ -52,10 +50,7 @@ const Popup = dynamic(() => import("react-leaflet").then((mod) => mod.Popup), {
   ssr: false,
 });
 
-// Marker Cluster
 import MarkerClusterGroup from "react-leaflet-cluster";
-
-// هوک useMap
 import { useMap } from "react-leaflet";
 
 // ─── Types ───────────────────────────────────────────
@@ -74,24 +69,28 @@ interface TileLayerConfig {
   url: string;
   attribution: string;
   icon: string;
+  subdomains?: string;
+  maxZoom?: number;
+  extraClassName?: string; // برای فیلتر CSS در دارک بلو
 }
 
-// ─── Tile Layers ─────────────────────────────────────
 const TILE_LAYERS: TileLayerConfig[] = [
   {
     id: "osm",
     name: "نقشه استاندارد",
-    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
     icon: "🗺️",
+    subdomains: "abcd",
   },
   {
     id: "satellite",
     name: "ماهواره‌ای",
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    attribution: "&copy; Esri",
+    url: "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+    attribution: '&copy; <a href="https://maps.google.com/">Google Maps</a>',
     icon: "🛰️",
+    subdomains: "",
+    maxZoom: 20,
   },
   {
     id: "dark",
@@ -99,7 +98,9 @@ const TILE_LAYERS: TileLayerConfig[] = [
     url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
     attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
     icon: "🌙",
-  },
+    subdomains: "abcd",
+    maxZoom: 19,
+  }
 ];
 
 // ─── Status Config ───────────────────────────────────
@@ -173,6 +174,10 @@ export function MapView({
   const [mounted, setMounted] = useState(false);
   const [showLayerMenu, setShowLayerMenu] = useState(false);
 
+  // شمارش خطاهای تایل برای جلوگیری از بازگشت زودهنگام
+  const tileErrorCount = useRef(0);
+  const MAX_TILE_ERRORS = 5;
+
   const initialCenter: [number, number] = center || [32.4279, 53.688];
   const initialZoom = zoom || 6;
 
@@ -183,11 +188,22 @@ export function MapView({
     setMounted(true);
   }, []);
 
-  // فیلتر مارکرهای معتبر (حتما lat و lng داشته باشند)
   const validMarkers = useMemo(
     () => markers.filter((ad) => ad.lat != null && ad.lng != null),
     [markers],
   );
+
+  // فقط بعد از چند خطا به OSM برمی‌گردیم
+  const handleTileError = () => {
+    tileErrorCount.current += 1;
+    if (
+      activeTileLayer !== "osm" &&
+      tileErrorCount.current >= MAX_TILE_ERRORS
+    ) {
+      tileErrorCount.current = 0;
+      setActiveTileLayer("osm");
+    }
+  };
 
   const toggleFullscreen = () => setIsFullscreen((prev) => !prev);
 
@@ -244,6 +260,7 @@ export function MapView({
                   <button
                     key={layer.id}
                     onClick={() => {
+                      tileErrorCount.current = 0;
                       setActiveTileLayer(layer.id);
                       setShowLayerMenu(false);
                     }}
@@ -329,8 +346,14 @@ export function MapView({
         style={{ borderRadius: "1rem" }}
       >
         <TileLayer
-          attribution={activeLayer.attribution}
+          key={activeTileLayer}
           url={activeLayer.url}
+          attribution={activeLayer.attribution}
+          subdomains={activeLayer.subdomains || ""}
+          maxZoom={activeLayer.maxZoom ?? 19}
+          eventHandlers={{
+            tileerror: handleTileError,
+          }}
         />
 
         <MapController center={center} zoom={zoom} />
@@ -396,6 +419,8 @@ export function MapView({
     </div>
   );
 }
+
+
 
 // ─── AdCard Component (خلاصه‌شده با تأکید بر موقعیت) ─────────────────
 function AdCard({ ad, color }: { ad: MapAdItem; color: string }) {
@@ -476,12 +501,10 @@ function AdCard({ ad, color }: { ad: MapAdItem; color: string }) {
 
       {/* اطلاعات اصلی */}
       <div className="p-3 space-y-2">
-        {/* عنوان */}
         <h3 className="font-bold text-sm text-card-foreground line-clamp-2 leading-6">
           {ad.title || "بدون عنوان"}
         </h3>
 
-        {/* موقعیت دقیق */}
         <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-primary/5">
           <MapPin className="w-4 h-4 text-primary flex-shrink-0" />
           <p className="text-xs font-medium text-foreground truncate">
@@ -490,7 +513,6 @@ function AdCard({ ad, color }: { ad: MapAdItem; color: string }) {
           </p>
         </div>
 
-        {/* ویژگی‌های سریع (در صورت وجود) */}
         {(area || roomsCount) && (
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             {area && <span>{area.toLocaleString("fa-IR")} متر</span>}
@@ -498,7 +520,6 @@ function AdCard({ ad, color }: { ad: MapAdItem; color: string }) {
           </div>
         )}
 
-        {/* دکمه‌ها */}
         <div className="flex items-center gap-2 pt-1">
           <Link
             href={`/ad/${ad.id ?? ad._id}`}

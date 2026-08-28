@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import apiClient from "@/services/api/client";
 
 const SESSION_ID_KEY = "visitor_session_id";
-const LAST_PATH_KEY = "last_visited_path"; // 🆕 کلید برای ذخیره آخرین مسیر
+const LAST_PATH_KEY = "last_visited_path";
 
 function getSessionId(): string {
   if (typeof window === "undefined") return "";
@@ -17,54 +18,40 @@ function getSessionId(): string {
   return sessionId;
 }
 
-function getUserId(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const userStr = localStorage.getItem("user");
-    if (!userStr) return null;
-    const user = JSON.parse(userStr);
-    return user?._id || null;
-  } catch {
-    return null;
-  }
-}
-
 export default function PageViewLogger() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const lastLogged = useRef<string>("");
 
   useEffect(() => {
-    const logPageView = async () => {
+    const currentPath =
+      pathname + (searchParams?.toString() ? `?${searchParams.toString()}` : "");
+
+    if (currentPath === lastLogged.current) return;
+    lastLogged.current = currentPath;
+
+    const timer = setTimeout(async () => {
       try {
         const sessionId = getSessionId();
-        const userId = getUserId();
-        const fullPath =
-          pathname +
-          (searchParams?.toString() ? `?${searchParams.toString()}` : "");
-
-        // 🆕 ترکیب document.referrer با آخرین مسیر ذخیره‌شده
         const externalReferrer = document.referrer || "";
         const lastPath = localStorage.getItem(LAST_PATH_KEY) || "";
-        // اولویت با referrer خارجی (اگر وجود داشته باشد)، در غیر این صورت آخرین مسیر داخلی
         const referrer = externalReferrer || lastPath;
 
-        const body: any = { path: fullPath, referrer, sessionId };
-        if (userId) body.userId = userId;
-
-        // 🆕 ذخیره مسیر فعلی برای بازدید بعدی
-        localStorage.setItem(LAST_PATH_KEY, fullPath);
-
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/page-view`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+        // ارسال با apiClient تا توکن و کوکی‌ها به‌صورت خودکار ضمیمه شوند
+        await apiClient.post("/page-view", {
+          path: currentPath,
+          referrer,
+          sessionId,
         });
-      } catch (error) {
-        // silent
-      }
-    };
 
-    logPageView();
+        // ذخیره مسیر فعلی برای مراجعه بعدی
+        localStorage.setItem(LAST_PATH_KEY, currentPath);
+      } catch (error) {
+        // ثبت بازدید نباید کاربر را اذیت کند
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
   }, [pathname, searchParams]);
 
   return null;

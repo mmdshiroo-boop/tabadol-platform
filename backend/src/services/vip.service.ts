@@ -1,4 +1,3 @@
-// backend/src/services/vip.service.ts
 import mongoose from "mongoose";
 import { VipPlan } from "../models/VipPlan.model";
 import { VipSubscription } from "../models/VipSubscription.model";
@@ -8,6 +7,8 @@ import { AuditAction } from "../models/AuditLog.model";
 import { Request } from "express";
 import { UserSubscription } from "../models/UserSubscription.model";
 import { Favorite } from "../models";
+import { grantPoints } from "./loyalty.service";
+import { LOYALTY_RULES } from "../config/loyalty";
 
 export class VipService {
   static async getActivePlans(): Promise<any[]> {
@@ -88,6 +89,7 @@ export class VipService {
       subscriptionEndDate: subscription?.endDate || null, // ✅ همین یک خط
     };
   }
+
   static async createUpgradeRequest(
     userId: string,
     planId: string,
@@ -139,6 +141,15 @@ export class VipService {
     });
 
     await User.findByIdAndUpdate(userId, { role: "vip" });
+
+    // 🆕 اعطای امتیاز خرید VIP
+    await grantPoints(
+      userId,
+      LOYALTY_RULES.VIP_PURCHASE,
+      "vip_purchase",
+      "پاداش خرید اشتراک ویژه",
+      { planId: plan._id.toString(), amount: plan.price }
+    );
 
     await createAuditLog({
       userId,

@@ -29,10 +29,25 @@ import {
   DollarSign,
   Home,
   Info,
+  Upload,
+  X,
+  Image as ImageIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { adsApi, Ad } from "@/services/api/ads.api";
 import { categoryApi, Category } from "@/services/api/category.api";
+import axios from "axios";
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") ||
+  "http://localhost:5001";
+
+const getImageUrl = (img: string): string => {
+  if (!img) return "/placeholder.jpg";
+  if (img.startsWith("http")) return img;
+  if (img.startsWith("/uploads")) return `${API_BASE}${img}`;
+  return `${API_BASE}/uploads/${img}`;
+};
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -49,6 +64,7 @@ export default function EditAdPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [formData, setFormData] = useState<Partial<Ad>>({
     title: "",
@@ -63,6 +79,7 @@ export default function EditAdPage() {
     contactName: "",
     isUrgent: false,
     adType: "sale",
+    images: [],
   });
 
   useEffect(() => {
@@ -86,6 +103,7 @@ export default function EditAdPage() {
           contactName: ad.contactName || "",
           isUrgent: ad.isUrgent || false,
           adType: ad.adType || "sale",
+          images: ad.images || [],
         });
         setCategories(categoriesData || []);
       } catch (error) {
@@ -115,6 +133,10 @@ export default function EditAdPage() {
       toast.error("شهر الزامی است");
       return;
     }
+    if (!formData.images || formData.images.length === 0) {
+      toast.error("حداقل یک تصویر برای آگهی الزامی است");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -131,6 +153,68 @@ export default function EditAdPage() {
 
   const handleChange = (field: keyof Ad, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || !files.length) return;
+
+    setUploading(true);
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      toast.error("لطفاً ابتدا وارد حساب کاربری خود شوید");
+      setUploading(false);
+      return;
+    }
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`فایل ${file.name} بزرگتر از ۵ مگابایت است`);
+        continue;
+      }
+
+      const formDataFile = new FormData();
+      formDataFile.append("image", file);
+
+      try {
+        const response = await axios.post(
+          `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api"}/ads/upload-image`,
+          formDataFile,
+          {
+            headers: {
+              "Content-Type": "multipart/form-data",
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
+
+        if (response.data.success) {
+          const imageUrl = response.data.data.url;
+          const newImages = [...(formData.images || []), imageUrl];
+          handleChange("images", newImages);
+          toast.success(`تصویر ${file.name} با موفقیت آپلود شد`);
+        } else {
+          toast.error(response.data.message || "خطا در آپلود تصویر");
+        }
+      } catch (error: any) {
+        console.error("Upload error:", error);
+        const errorMessage =
+          error.response?.data?.message || "خطا در ارتباط با سرور آپلود";
+        toast.error(errorMessage);
+      }
+    }
+
+    setUploading(false);
+    e.target.value = "";
+  };
+
+  const removeImage = (index: number) => {
+    const newImages = [...(formData.images || [])];
+    newImages.splice(index, 1);
+    handleChange("images", newImages);
   };
 
   if (loading) {
@@ -305,6 +389,91 @@ export default function EditAdPage() {
                   required
                 />
               </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* تصاویر */}
+        <motion.div variants={itemVariants}>
+          <Card className="border-border/60 shadow-sm rounded-2xl overflow-hidden">
+            <CardHeader className="border-b border-border/20 bg-muted/10">
+              <CardTitle className="text-base font-bold flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-primary" />
+                تصاویر آگهی
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <label
+                  className={
+                    "flex flex-col items-center justify-center aspect-square " +
+                    "border-2 border-dashed rounded-2xl cursor-pointer transition-all group " +
+                    (uploading
+                      ? "border-primary/30 bg-primary/5"
+                      : "border-border hover:border-primary/50 bg-muted/10 hover:bg-muted/30")
+                  }
+                >
+                  <div className="flex flex-col items-center gap-2 p-3 text-center">
+                    {uploading ? (
+                      <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                    ) : (
+                      <Upload className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
+                    )}
+                    <span className="text-xs font-bold text-foreground/70">
+                      {uploading ? "آپلود..." : "افزودن عکس"}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground hidden sm:block">
+                      حداکثر ۵ مگابایت
+                    </span>
+                  </div>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    onChange={handleImageUpload}
+                    disabled={uploading}
+                  />
+                </label>
+
+                {formData.images?.map((img: string, idx: number) => (
+                  <div
+                    key={idx}
+                    className="relative aspect-square rounded-2xl border border-border overflow-hidden bg-muted shadow-sm group"
+                  >
+                    <img
+                      src={getImageUrl(img)}
+                      alt={`تصویر ${idx + 1}`}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "/placeholder.jpg";
+                      }}
+                    />
+                    {idx === 0 && (
+                      <div className="absolute bottom-1.5 right-1.5 bg-background/90 backdrop-blur-sm text-[10px] font-black text-primary px-2 py-0.5 rounded-lg border border-primary/20 flex items-center gap-1">
+                        <ImageIcon className="w-3 h-3" />
+                        تصویر اصلی
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        className="w-8 h-8 rounded-xl"
+                        onClick={() => removeImage(idx)}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {(!formData.images || formData.images.length === 0) && (
+                <p className="text-xs font-bold text-destructive mt-2">
+                  حداقل یک تصویر الزامی است
+                </p>
+              )}
             </CardContent>
           </Card>
         </motion.div>

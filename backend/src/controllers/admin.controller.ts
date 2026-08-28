@@ -1,4 +1,3 @@
-// backend/src/controllers/admin.controller.ts
 import { Response } from "express";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { AdminReportService } from "../services/adminReport.service";
@@ -124,7 +123,7 @@ export const getAds = async (req: AuthRequest, res: Response) => {
     const skip = (Number(page) - 1) * Number(limit);
     const [ads, total] = await Promise.all([
       Ad.find(query)
-        .populate("userId", "firstName lastName phone")
+        .populate("userId", "firstName lastName phone isVerified role") // ✅ isVerified اضافه شد
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(Number(limit)),

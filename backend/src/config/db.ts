@@ -10,8 +10,9 @@ export const connectDB = async () => {
   }
 
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI);
-    console.log(`✅ MongoDB connected successfully`);
+const conn = await mongoose.connect(process.env.MONGODB_URI, {
+  retryWrites: false,
+});    console.log(`✅ MongoDB connected successfully`);
     console.log(`📊 Database: ${conn.connection.name}`);
     console.log(`🔗 Host: ${conn.connection.host}`);
     return conn;

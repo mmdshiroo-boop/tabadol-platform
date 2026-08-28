@@ -12,7 +12,7 @@ export interface IBulkTask extends Document {
     errors: number;
     skipped: number;
   };
-  errorLog: { row: string; index: number; type?: "skip" | "error"; message: string }[];
+  errorLog: { row: string; index: number; message: string }[];
   result: any;
   createdAt: Date;
   updatedAt: Date;
@@ -39,7 +39,6 @@ const BulkTaskSchema = new Schema<IBulkTask>(
       {
         row: String,
         index: Number,
-        type: { type: String, enum: ["skip", "error"], default: "skip" },
         message: String,
       },
     ],

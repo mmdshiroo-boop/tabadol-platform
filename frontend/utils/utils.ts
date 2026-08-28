@@ -1,5 +1,5 @@
 /* ============================================================
- * ابزارهای مدیریت خطا - آگهی یاب
+ * ابزارهای مدیریت خطا - تبادل
  * شامل: کلاس‌های خطا، توابع هندلر، پیام‌های فارسی و لاگ‌گیری
  * ============================================================ */
 
@@ -19,30 +19,21 @@ import {
  * تایپ‌ها و اینترفیس‌ها
  * ---------------------------------------------------------- */
 
-/** کدهای خطای HTTP پشتیبانی‌شده در سیستم */
 export type SupportedErrorCode = 401 | 403 | 404 | 405 | 500 | 502 | 503;
 
-/** خروجی اطلاعات ساختاریافته صفحه خطا */
 export interface ErrorPageInfo {
-  /** عنوان فارسی خطا */
   title: string;
-  /** توضیح فارسی خطا */
   description: string;
-  /** آیکون نمایشی Lucide */
   icon: LucideIcon;
-  /** برچسب دکمه عملیاتی */
   action: string;
-  /** مسیر مقصد دکمه عملیاتی */
   actionHref: string;
 }
 
-/** نتیجه بررسی وضعیت وجود آگهی */
 export interface AdCheckResult {
   exists: boolean;
   redirectPath: string;
 }
 
-/** ساختار لاگ‌های ثبت‌شده خطا */
 export interface ErrorLogPayload {
   timestamp: string;
   level: "ERROR" | "WARN" | "INFO";
@@ -55,10 +46,6 @@ export interface ErrorLogPayload {
  * کلاس اختصاصی خطای برنامه‌نویسی (AppError)
  * ---------------------------------------------------------- */
 
-/**
- * کلاس مدیریت خطاهای اختصاصی اپلیکیشن
- * برای متمایز کردن خطاهای قابل کنترل (Operational) از خطاهای ناخواسته سرور
- */
 export class AppError extends Error {
   public readonly statusCode: SupportedErrorCode;
   public readonly isOperational: boolean;
@@ -82,7 +69,6 @@ export class AppError extends Error {
  * پیام‌های خطای فارسی
  * ---------------------------------------------------------- */
 
-/** نگاشت کد خطا به پیام جامع فارسی */
 export const ERROR_MESSAGES: Record<SupportedErrorCode, string> = {
   401: "نشست کاری شما معتبر نیست یا منقضی شده است. لطفاً مجدداً وارد حساب خود شوید.",
   403: "شما دسترسی لازم برای مشاهده این صفحه را ندارید.",
@@ -93,7 +79,6 @@ export const ERROR_MESSAGES: Record<SupportedErrorCode, string> = {
   503: "سرویس موقتاً در دسترس نیست. در حال انجام عملیات نگهداری هستیم.",
 };
 
-/** پیام‌های خطای اختصاصی بخش‌های مختلف پلتفرم */
 export const PLATFORM_ERROR_MESSAGES = {
   DELETED_AD: "این آگهی توسط کاربر حذف شده است.",
   EXPIRED_AD: "مهلت نمایش این آگهی به پایان رسیده است.",
@@ -111,18 +96,8 @@ export const PLATFORM_ERROR_MESSAGES = {
  * توابع مدیریت آگهی و نشست کاربر
  * ---------------------------------------------------------- */
 
-/**
- * بررسی وضعیت آگهی و بازگرداندن مسیر مناسب
- *
- * @param slug - شناسه متنی آگهی (مثلاً "apartment-tehran-123")
- * @returns مسیر ریدایرکت مناسب بر اساس وضعیت
- */
 export async function handleDeletedAd(slug: string): Promise<AdCheckResult> {
   try {
-    // در محیط واقعی: درخواست به سرویس API
-    // const res = await fetch(`/api/ads/${encodeURIComponent(slug)}`);
-    // const adExists = res.ok;
-
     const adExists = false; // شبیه‌سازی برای الگو
 
     if (!adExists) {
@@ -137,7 +112,6 @@ export async function handleDeletedAd(slug: string): Promise<AdCheckResult> {
       redirectPath: `/ads/${encodeURIComponent(slug)}`,
     };
   } catch (error) {
-    // در صورت بروز خطا در ارتباط با API
     return {
       exists: false,
       redirectPath: "/search",
@@ -145,11 +119,6 @@ export async function handleDeletedAd(slug: string): Promise<AdCheckResult> {
   }
 }
 
-/**
- * مدیریت انقضای نشست کاربر و هدایت به صفحه ورود
- *
- * @param returnUrl - مسیر بازگشت کاربر پس از ورود موفق (اختیاری)
- */
 export function handleExpiredSession(returnUrl?: string): never {
   const redirectUrl = returnUrl
     ? `/auth/login?redirect=${encodeURIComponent(returnUrl)}`
@@ -162,7 +131,6 @@ export function handleExpiredSession(returnUrl?: string): never {
  * توابع ساخت داده‌های صفحات خطا
  * ---------------------------------------------------------- */
 
-/** نگاشت کد خطا به آیکون Lucide */
 const ERROR_ICONS: Record<SupportedErrorCode, LucideIcon> = {
   401: ShieldAlert,
   403: ShieldX,
@@ -173,7 +141,6 @@ const ERROR_ICONS: Record<SupportedErrorCode, LucideIcon> = {
   503: Hammer,
 };
 
-/** نگاشت کد خطا به دکمه عملیاتی */
 const ERROR_ACTIONS: Record<
   SupportedErrorCode,
   { label: string; href: string }
@@ -187,7 +154,6 @@ const ERROR_ACTIONS: Record<
   503: { label: "بازگشت بعداً", href: "/" },
 };
 
-/** نگاشت کد خطا به عنوان فارسی */
 const ERROR_TITLES: Record<SupportedErrorCode, string> = {
   401: "نیاز به احراز هویت",
   403: "دسترسی محدود است",
@@ -198,16 +164,9 @@ const ERROR_TITLES: Record<SupportedErrorCode, string> = {
   503: "سرویس موقتاً در دسترس نیست",
 };
 
-/**
- * دریافت اطلاعات کامل صفحه خطا بر اساس کد وضعیت HTTP
- *
- * @param statusCode - کد خطای HTTP
- * @returns اطلاعات نمایشی کامل شامل عنوان، توضیح، آیکون و دکمه اکشن
- */
 export function getErrorPageInfo(statusCode: number): ErrorPageInfo {
   const code = statusCode as SupportedErrorCode;
 
-  // فال‌بک در صورت ورود کد خطای تعریف‌نشده
   if (!(code in ERROR_MESSAGES)) {
     return {
       title: "خطایی پیش‌بینی‌نشده رخ داد",
@@ -233,13 +192,6 @@ export function getErrorPageInfo(statusCode: number): ErrorPageInfo {
  * تابع کمکی لاگ‌گیری ساختاریافته (Logging)
  * ---------------------------------------------------------- */
 
-/**
- * ساخت لاگ ساختاریافته (JSON) از خطاهای رخ‌داده
- *
- * @param error - شیء خطا یا هر داده ناشناخته دیگر
- * @param context - اطلاعات اضافی مانند userId, slug و...
- * @returns رشته لاگ قالب‌بندی‌شده
- */
 export function formatErrorLog(
   error: unknown,
   context?: Record<string, unknown>,
@@ -264,7 +216,6 @@ export function formatErrorLog(
     context: context ?? {},
   };
 
-  // استفاده از replacer سفارشی جهت جلوگیری از خطای Circular Reference
   const seen = new WeakSet();
   return JSON.stringify(
     logPayload,

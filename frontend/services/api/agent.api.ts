@@ -1,5 +1,8 @@
+// ============================================================
+// 1️⃣ FRONTEND: services/api/agent.api.ts (اصلاح‌شده کامل)
+// ============================================================
 // frontend/services/api/agent.api.ts
-import apiClient from "./client"; // ← استفاده از apiClient اصلی پروژه
+import apiClient from "./client";
 
 export interface Agent {
   _id: string;
@@ -51,9 +54,9 @@ export interface CreateAgentData {
 }
 
 export const agentApi = {
-  // ─── دریافت آمار داشبورد (اصلاح مسیر) ───
-  getStats: async (): Promise<AgentStats> => {
-    const response = await apiClient.get("/agents/stats"); // ← مسیر درست
+  // ─── دریافت آمار ───
+  getStats: async (params?: { startDate?: string; endDate?: string }): Promise<AgentStats> => {
+    const response = await apiClient.get("/agents/stats", { params });
     return response.data.data;
   },
 
@@ -69,17 +72,14 @@ export const agentApi = {
     return response.data.data;
   },
 
-  // ─── ایجاد مشاور جدید ───
+  // ─── ایجاد مشاور ───
   create: async (data: CreateAgentData): Promise<Agent> => {
     const response = await apiClient.post("/agents", data);
     return response.data.data;
   },
 
   // ─── ویرایش مشاور ───
-  update: async (
-    id: string,
-    data: Partial<CreateAgentData>,
-  ): Promise<Agent> => {
+  update: async (id: string, data: Partial<CreateAgentData>): Promise<Agent> => {
     const response = await apiClient.put(`/agents/${id}`, data);
     return response.data.data;
   },
@@ -89,7 +89,7 @@ export const agentApi = {
     await apiClient.delete(`/agents/${id}`);
   },
 
-  // ─── تغییر وضعیت مشاور ───
+  // ─── تغییر وضعیت ───
   toggleStatus: async (id: string): Promise<Agent> => {
     const response = await apiClient.patch(`/agents/${id}/toggle-status`);
     return response.data.data;
@@ -103,44 +103,67 @@ export const agentApi = {
 
   getReportByRange: async (startDate: string, endDate: string) => {
     const response = await apiClient.get(
-      `/agents/reports/range?startDate=${startDate}&endDate=${endDate}`,
+      `/agents/reports/range?startDate=${startDate}&endDate=${endDate}`
     );
     return response.data.data;
   },
 
-  generateDailyReport: async () => {
-    const response = await apiClient.post("/agents/reports/daily");
+  // ─── ذخیره گزارش روزانه ───
+  generateDailyReport: async (params?: { startDate?: string; endDate?: string }) => {
+    const response = await apiClient.post("/agents/reports/daily", params);
     return response.data.data;
   },
 
-  // ─── دانلود گزارش (اکسل) ───
-  downloadReportExcel: async () => {
-    const response = await apiClient.get("/agents/report/excel", {
-      // ✅ اصلاح شد
-      responseType: "blob",
-    });
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "agents-report.xlsx");
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+  // ─── دانلود گزارش اکسل ───
+  downloadReportExcel: async (params?: { startDate?: string; endDate?: string }) => {
+    try {
+      const response = await apiClient.get("/agents/report/excel", {
+        params,
+        responseType: "blob",
+      });
+      
+      // ایجاد URL برای دانلود
+      const blob = new Blob([response.data], { 
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" 
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `گزارش-آژانس-${new Date().toISOString().slice(0,10)}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      return true;
+    } catch (error: any) {
+      console.error("Error downloading Excel:", error);
+      throw new Error(error.response?.data?.message || "خطا در دانلود فایل اکسل");
+    }
   },
 
-  // ─── دانلود گزارش (PDF) ───
-  downloadReportPDF: async () => {
-    const response = await apiClient.get("/agents/report/pdf", {
-      // ✅ اصلاح شد
-      responseType: "blob",
-    });
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "agents-report.pdf");
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+  // ─── دانلود گزارش PDF ───
+  downloadReportPDF: async (params?: { startDate?: string; endDate?: string }) => {
+    try {
+      const response = await apiClient.get("/agents/report/pdf", {
+        params,
+        responseType: "blob",
+      });
+      
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `گزارش-آژانس-${new Date().toISOString().slice(0,10)}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      return true;
+    } catch (error: any) {
+      console.error("Error downloading PDF:", error);
+      throw new Error(error.response?.data?.message || "خطا در دانلود فایل PDF");
+    }
   },
- 
 };

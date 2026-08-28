@@ -1,4 +1,4 @@
-// backend/src/routes/agent.routes.ts
+
 import { Router } from "express";
 import { protect, hasPermission } from "../middleware/auth.middleware";
 import {
@@ -21,21 +21,19 @@ const router = Router();
 
 router.use(protect);
 
-// ── آمار و گزارشات (فقط با احراز هویت، بدون پرمیژن اضافی چون مال خودشه) ──
+// ─── آمار و گزارشات ───
 router.get("/stats", getAgentStats);
 router.get("/reports/list", getAgentReports);
-router.get("/report/excel", downloadExcelReport);
-router.get("/report/pdf", downloadPdfReport);
+router.get("/report/excel", downloadExcelReport);  // ← مسیر درست
+router.get("/report/pdf", downloadPdfReport);      // ← مسیر درست
 router.get("/advanced-search", agentAdvancedSearch);
-// ── مشاوران آژانس ──
+
+// ─── مشاوران ───
 router.get("/agency", getAgencyAgents);
 router.post("/", hasPermission("users:write"), createAgent);
 router.put("/:id", hasPermission("users:write"), updateAgent);
 router.delete("/:id", hasPermission("users:delete"), deleteAgent);
-router.patch(
-  "/:id/toggle-status",
-  hasPermission("users:ban"),
-  toggleAgentStatus,
-);
+router.patch("/:id/toggle-status", hasPermission("users:ban"), toggleAgentStatus);
 router.post("/reports/daily", generateDailyReport);
+
 export default router;

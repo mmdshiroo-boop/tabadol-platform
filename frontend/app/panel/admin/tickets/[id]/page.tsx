@@ -96,7 +96,7 @@ function MessageBubble({
       <div className={cn("max-w-[80%] sm:max-w-[72%]")}>
         {/* نام و زمان */}
         <div className={cn("flex items-center gap-2 mb-1.5 text-[11px] text-muted-foreground", isAdmin && "justify-end")}>
-          <span className="font-bold">{isAdmin ? "پشتیبانی هویج" : userName}</span>
+          <span className="font-bold">{isAdmin ? "پشتیبانی تبادل" : userName}</span>
           <span>{timeStr}</span>
         </div>
 

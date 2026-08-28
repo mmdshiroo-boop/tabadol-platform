@@ -337,18 +337,18 @@ export const createAgent = async (req: AuthRequest, res: Response) => {
     });
     await newUser.save();
 
-    const agent = new Agent({
-      userId: newUser._id, // ✅ در اینجا userId ست می‌شود (مربوط به ایجاد)
-      firstName,
-      lastName,
-      phone: formattedPhone,
-      email: email || undefined,
-      nationalCode: nationalCode || undefined,
-      agencyId: req.user!._id,
-      password: hashedPassword,
-      status: "active",
-      propertiesCount: 0,
-    });
+const agent = new Agent({
+  userId: newUser._id, // ✅
+  firstName,
+  lastName,
+  phone: formattedPhone,
+  email: email || undefined,
+  nationalCode: nationalCode || undefined,
+  agencyId: req.user!._id,
+  password: hashedPassword,
+  status: "active",
+  propertiesCount: 0,
+});
     await agent.save();
 
     await createAuditLog({

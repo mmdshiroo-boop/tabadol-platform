@@ -1,4 +1,3 @@
-// hooks/useMarketAdvancedFilter.ts
 import { useState, useCallback, useMemo } from "react";
 import {
   MarketFilterValues,
@@ -6,6 +5,8 @@ import {
   DEFAULT_MARKET_FILTER_VALUES,
   PROPERTY_TYPE_OPTIONS,
   PRICE_RANGE_OPTIONS,
+  RENT_DEPOSIT_RANGE_OPTIONS,
+  RENT_MONTHLY_RANGE_OPTIONS,
   SIZE_RANGE_OPTIONS,
   BUILDING_AGE_OPTIONS,
   ROOMS_COUNT_OPTIONS,
@@ -95,6 +96,7 @@ export function useMarketAdvancedFilter({
       );
     }
 
+    // نوع ملک
     const propType = PROPERTY_TYPE_OPTIONS.find(
       (o) => o.value === appliedFilters.propertyType,
     );
@@ -106,17 +108,52 @@ export function useMarketAdvancedFilter({
       );
     }
 
-    const priceOpt = PRICE_RANGE_OPTIONS.find(
-      (o) => o.value === appliedFilters.priceRange,
-    );
-    if (appliedFilters.priceRange !== "none" && appliedFilters.priceRange) {
-      addTag(
-        "priceRange",
-        "قیمت",
-        priceOpt?.label || appliedFilters.priceRange,
+    // قیمت فروش فقط در حالت خرید
+    if (appliedFilters.tradeType !== "rent") {
+      const priceOpt = PRICE_RANGE_OPTIONS.find(
+        (o) => o.value === appliedFilters.priceRange,
       );
+      if (appliedFilters.priceRange !== "none" && appliedFilters.priceRange) {
+        addTag(
+          "priceRange",
+          "قیمت",
+          priceOpt?.label || appliedFilters.priceRange,
+        );
+      }
     }
 
+    // رهن (ودیعه) و اجاره ماهانه فقط در حالت اجاره
+    if (appliedFilters.tradeType === "rent") {
+      const depositOpt = RENT_DEPOSIT_RANGE_OPTIONS.find(
+        (o) => o.value === appliedFilters.rentDepositRange,
+      );
+      if (
+        appliedFilters.rentDepositRange !== "none" &&
+        appliedFilters.rentDepositRange
+      ) {
+        addTag(
+          "rentDepositRange",
+          "مبلغ رهن",
+          depositOpt?.label || appliedFilters.rentDepositRange,
+        );
+      }
+
+      const monthlyOpt = RENT_MONTHLY_RANGE_OPTIONS.find(
+        (o) => o.value === appliedFilters.rentMonthlyRange,
+      );
+      if (
+        appliedFilters.rentMonthlyRange !== "none" &&
+        appliedFilters.rentMonthlyRange
+      ) {
+        addTag(
+          "rentMonthlyRange",
+          "اجاره ماهانه",
+          monthlyOpt?.label || appliedFilters.rentMonthlyRange,
+        );
+      }
+    }
+
+    // متراژ
     const sizeOpt = SIZE_RANGE_OPTIONS.find(
       (o) => o.value === appliedFilters.sizeRange,
     );
@@ -124,6 +161,7 @@ export function useMarketAdvancedFilter({
       addTag("sizeRange", "متراژ", sizeOpt?.label || appliedFilters.sizeRange);
     }
 
+    // سن بنا
     const ageOpt = BUILDING_AGE_OPTIONS.find(
       (o) => o.value === appliedFilters.buildingAge,
     );
@@ -135,6 +173,7 @@ export function useMarketAdvancedFilter({
       );
     }
 
+    // تعداد اتاق
     const roomOpt = ROOMS_COUNT_OPTIONS.find(
       (o) => o.value === appliedFilters.roomsCount,
     );
@@ -142,6 +181,7 @@ export function useMarketAdvancedFilter({
       addTag("roomsCount", "اتاق", roomOpt?.label || appliedFilters.roomsCount);
     }
 
+    // موقعیت
     if (appliedFilters.province) {
       addTag("province", "استان", appliedFilters.province);
     }

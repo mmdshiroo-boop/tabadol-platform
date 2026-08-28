@@ -8,6 +8,8 @@ export type NotificationType =
   | "ad_expired"
   | "new_message"
   | "vip_upgrade"
+  | "loyalty_points_earned"   // 🆕
+  | "tier_upgrade"            // 🆕
   // ─── admin ──────────────────────────────
   | "new_ad_pending"
   | "new_user_registered"
@@ -18,12 +20,11 @@ export type NotificationType =
   | "ad_reported"
   | "user_banned"
   | "user_unbanned"
-  | "report_created" // ← این رو اضافه کن
-
+  | "report_created"
   // ─── تیکت‌ها ──────────────────────────────
-  | "ticket_created" // 🆕
-  | "ticket_reply" // 🆕
-  | "ticket_closed" // 🆕
+  | "ticket_created"
+  | "ticket_reply"
+  | "ticket_closed"
   // ─── expert ─────────────────────────────
   | "ad_assigned"
   | "verification_request"
@@ -110,6 +111,8 @@ const NotificationSchema = new Schema<INotification>(
         "ad_expired",
         "new_message",
         "vip_upgrade",
+        "loyalty_points_earned", // 🆕
+        "tier_upgrade",          // 🆕
         // admin
         "new_ad_pending",
         "new_user_registered",
@@ -119,10 +122,9 @@ const NotificationSchema = new Schema<INotification>(
         "user_reported",
         "ad_reported",
         "user_banned",
-        "report_created", // ← این رو اضافه کن
-
+        "report_created",
         "user_unbanned",
-        // tickets 🆕
+        // tickets
         "ticket_created",
         "ticket_reply",
         "ticket_closed",

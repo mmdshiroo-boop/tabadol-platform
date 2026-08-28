@@ -1,19 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import {
   Phone,
   MessageCircle,
-  ShieldCheck,
   Star,
   Copy,
   Check,
   ShieldAlert,
   Flag,
   ExternalLink,
+  Printer,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AdCalculator } from "./AdCalculator";
@@ -21,6 +21,10 @@ import { useAuth } from "@/app/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { chatApi } from "@/services/api/chat.api";
 import { ReportModal } from "@/components/report/ReportModal";
+import VerifiedBadge from "@/components/common/VerifiedBadge";
+import Link from "next/link";
+import { useReactToPrint } from "react-to-print";
+import { AdPrintContent } from "./AdPrintContent";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api";
 
@@ -37,6 +41,7 @@ interface AdActionsProps {
   adId?: string;
   sellerUserId?: string;
   sourceUrl?: string;
+  adData?: any;
 }
 
 export function AdActions({
@@ -52,6 +57,7 @@ export function AdActions({
   adId,
   sellerUserId,
   sourceUrl,
+  adData,
 }: AdActionsProps) {
   const [showFullPhone, setShowFullPhone] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -59,6 +65,13 @@ export function AdActions({
   const [reportOpen, setReportOpen] = useState(false);
   const { user } = useAuth();
   const router = useRouter();
+
+  const printRef = useRef<HTMLDivElement>(null);
+
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: adTitle || "آگهی",
+  });
 
   const formatPhoneNumber = (phone: string) => {
     if (!phone) return "";
@@ -81,7 +94,7 @@ export function AdActions({
   const handleStartChat = async () => {
     if (!user) {
       router.push(
-        `/auth/login?redirect=${encodeURIComponent(window.location.pathname)}`,
+        `/auth/login?redirect=${encodeURIComponent(window.location.pathname)}`
       );
       return;
     }
@@ -114,21 +127,30 @@ export function AdActions({
       >
         {/* پروفایل فروشنده */}
         <div className="flex items-center gap-3">
-        <Avatar className="w-12 h-12 border-2 border-primary/20 rounded-full">
-  <AvatarImage
-    src={sellerAvatar ? getAvatarUrl() : "/images/user.webp"}
-    className="object-cover"
-  />
-  <AvatarFallback className="bg-primary/10 text-primary font-black text-sm rounded-full" />
-</Avatar>
+          <Avatar className="w-12 h-12 border-2 border-primary/20 rounded-full">
+            <AvatarImage
+              src={sellerAvatar ? getAvatarUrl() : "/images/user.webp"}
+              className="object-cover"
+            />
+            <AvatarFallback className="bg-primary/10 text-primary font-black text-sm rounded-full" />
+          </Avatar>
           <div className="space-y-0.5 flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <h3 className="font-black text-sm md:text-base text-card-foreground truncate">
-                {sellerName}
-              </h3>
-              {isVerified && (
-                <ShieldCheck className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+              {sellerUserId ? (
+                <Link
+                  href={`/profile/${sellerUserId}`}
+                  className="hover:underline underline-offset-4"
+                >
+                  <h3 className="font-black text-sm md:text-base text-card-foreground truncate">
+                    {sellerName}
+                  </h3>
+                </Link>
+              ) : (
+                <h3 className="font-black text-sm md:text-base text-card-foreground truncate">
+                  {sellerName}
+                </h3>
               )}
+              {isVerified && <VerifiedBadge size="sm" />}
             </div>
 
             {sellerRating > 0 && (
@@ -150,7 +172,7 @@ export function AdActions({
 
         <Separator className="hidden md:block" />
 
-        {/* دکمه‌های تماس (فقط در دسکتاپ نمایش داده می‌شود) */}
+        {/* دکمه‌های تماس (دسکتاپ) */}
         <div className="hidden md:flex flex-col space-y-2.5">
           {!showFullPhone ? (
             <Button
@@ -205,7 +227,7 @@ export function AdActions({
 
         <Separator />
 
-        {/* 🆕 ارجاع به لینک اصلی */}
+        {/* ارجاع به لینک اصلی */}
         {sourceUrl && (
           <Button
             variant="outline"
@@ -218,6 +240,16 @@ export function AdActions({
             </a>
           </Button>
         )}
+
+        {/* پرینت آگهی */}
+        <Button
+          variant="outline"
+          className="w-full gap-2 rounded-xl h-11 text-xs font-bold"
+          onClick={() => handlePrint()}
+        >
+          <Printer className="w-4 h-4" />
+          پرینت آگهی (PDF)
+        </Button>
 
         {/* گزارش تخلف */}
         <Button
@@ -242,21 +274,41 @@ export function AdActions({
         </div>
       </div>
 
-      {/* نوار چسبان پایین مخصوص حالت موبایل */}
+      {/* بخش چاپ مخفی */}
+      <div
+        style={{
+          position: "absolute",
+          left: "-9999px",
+          top: 0,
+          width: "210mm",
+          minHeight: "297mm",
+          background: "white",
+          zIndex: -1,
+        }}
+        className="print-area"
+      >
+        <div ref={printRef}>
+          <AdPrintContent
+            adData={adData}
+            sellerName={sellerName}
+            sellerPhone={sellerPhone}
+          />
+        </div>
+      </div>
+
+      {/* نوار چسبان پایین موبایل */}
       <div
         className="fixed bottom-0 inset-x-0 z-[100] flex md:hidden items-center gap-2 bg-background/95 backdrop-blur-xl border-t border-border p-3 px-4 shadow-[0_-10px_30px_-10px_rgba(0,0,0,0.1)]"
         style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
         dir="rtl"
       >
-        {/* دکمه چت (همیشه سمت راست/اول) */}
-
         <Button
           className="flex-1 h-12 rounded-xl bg-orange-500 text-white font-black text-sm hover:bg-orange-600 shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all"
           onClick={() => setShowFullPhone(true)}
         >
           اطلاعات تماس
         </Button>
-        {/* دکمه اطلاعات تماس (همیشه سمت چپ/دوم) */}
+
         {!showFullPhone ? (
           <Button
             variant="outline"
@@ -268,7 +320,6 @@ export function AdActions({
           </Button>
         ) : (
           <div className="flex-1 flex gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            {/* دکمه کپی */}
             <Button
               variant="outline"
               size="icon"
@@ -281,8 +332,6 @@ export function AdActions({
                 <Copy className="w-5 h-5" />
               )}
             </Button>
-
-            {/* دکمه شماره تلفن */}
             <Button
               className="flex-1 h-12 rounded-xl bg-orange-500 text-white font-black text-sm shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all"
               asChild
@@ -293,6 +342,15 @@ export function AdActions({
             </Button>
           </div>
         )}
+        {/* دکمه پرینت در موبایل */}
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-12 w-12 rounded-xl border-orange-500 text-orange-500 bg-white hover:bg-orange-50 flex-shrink-0"
+          onClick={() => handlePrint()}
+        >
+          <Printer className="w-5 h-5" />
+        </Button>
       </div>
 
       {/* Modal گزارش تخلف */}

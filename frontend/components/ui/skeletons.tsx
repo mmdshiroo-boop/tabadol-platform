@@ -1,15 +1,20 @@
-// components/ui/skeletons.tsx
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const FullPageSpinner = () => {
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center bg-background/95 backdrop-blur-sm z-50">
       <div className="flex flex-col items-center gap-10">
-        {/* لوگوی بزرگ در بالا */}
+        {/* لوگوی بزرگ در بالا — نسخه لایت (بزرگ‌تر + سایه) */}
         <img
-          src="/log.png"
-          alt="پلتفرم آگهی هویج"
-          className="h-28 md:h-36 w-auto object-contain"
+          src="/images/tabadol-logo-light.PNG"
+          alt="پلتفرم آگهی تبادل"
+          className="h-40 md:h-52 w-auto object-contain drop-shadow-xl dark:hidden"
+        />
+        {/* لوگوی بزرگ در بالا — نسخه دارک (بزرگ‌تر + سایه) */}
+        <img
+          src="/images/tabadol-logo-dark.PNG"
+          alt="پلتفرم آگهی تبادل"
+          className="h-40 md:h-52 w-auto object-contain drop-shadow-xl hidden dark:block"
         />
 
         <div className="flex flex-col items-center gap-6">
@@ -26,7 +31,7 @@ export const FullPageSpinner = () => {
           {/* عنوان */}
           <div className="text-center">
             <h1 className="text-2xl md:text-3xl font-black text-primary">
-              پلتفرم آگهی هویج
+              پلتفرم آگهی تبادل
             </h1>
             <p className="text-sm text-primary mt-2 animate-pulse">
               در حال بارگذاری...

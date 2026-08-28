@@ -18,7 +18,6 @@ import {
   Check,
   Loader2,
 } from "lucide-react";
-import { Province, City, locationApi } from "@/services/api/location.api";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +29,14 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import axios from "axios";
+import {
+  loadDivisions,
+  getProvinces,
+  getCounties,
+  getById,
+  normalizeName,
+  IranDivision,
+} from "@/lib/iranDivisions";
 
 interface SearchBoxProps {
   placeholder?: string;
@@ -94,18 +101,22 @@ function SearchBoxInner({
   const searchParams = useSearchParams();
 
   const [query, setQuery] = useState(searchParams.get("q") || "");
-  const [provinces, setProvinces] = useState<Province[]>([]);
-  const [cities, setCities] = useState<City[]>([]);
+  const [ready, setReady] = useState(false);
+  const [provinces, setProvinces] = useState<IranDivision[]>([]);
+  const [cities, setCities] = useState<IranDivision[]>([]);
 
   const [isOpen, setIsOpen] = useState(false);
   const [step, setStep] = useState<"province" | "city">("province");
   const [searchLocationQuery, setSearchLocationQuery] = useState("");
 
   const [tempProvince, setTempProvince] = useState<{
-    _id: string;
+    id: number;
     name: string;
   } | null>(null);
-  const [tempCity, setTempCity] = useState("");
+  const [tempCity, setTempCity] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
 
   const [selectedProvinceName, setSelectedProvinceName] = useState("");
   const [selectedCityName, setSelectedCityName] = useState(
@@ -114,25 +125,15 @@ function SearchBoxInner({
 
   const [isDetecting, setIsDetecting] = useState(false);
 
+  // بارگذاری داده‌های تقسیمات کشوری
   useEffect(() => {
-    locationApi
-      .getProvinces()
-      .then(setProvinces)
-      .catch((error) => console.error("خطا در دریافت استان‌ها:", error));
+    loadDivisions().then(() => {
+      setProvinces(getProvinces());
+      setReady(true);
+    });
   }, []);
 
-  useEffect(() => {
-    if (!tempProvince?._id) {
-      setCities([]);
-      return;
-    }
-
-    locationApi
-      .getCitiesByProvince(tempProvince._id)
-      .then(setCities)
-      .catch((error) => console.error("خطا در دریافت شهرها:", error));
-  }, [tempProvince]);
-
+  // همگام‌سازی با URL
   useEffect(() => {
     const q = searchParams.get("q") || "";
     const city = searchParams.get("city") || "";
@@ -143,25 +144,24 @@ function SearchBoxInner({
 
     if (!provinceParam) {
       setSelectedProvinceName("");
+      setTempProvince(null);
       return;
     }
 
-    if (provinces.length > 0) {
-      const foundProv = provinces.find(
-        (p) => p._id === provinceParam || p.name === provinceParam,
-      );
-
-      if (foundProv) {
-        setSelectedProvinceName(foundProv.name);
-        setTempProvince({ _id: foundProv._id, name: foundProv.name });
-      } else {
-        setSelectedProvinceName(provinceParam);
-      }
+    // پیدا کردن استان بر اساس نام
+    const foundProv = provinces.find(
+      (p) => normalizeName(p.Name) === normalizeName(provinceParam),
+    );
+    if (foundProv) {
+      setSelectedProvinceName(foundProv.Name);
+      setTempProvince({ id: foundProv.Id, name: foundProv.Name });
+    } else {
+      setSelectedProvinceName(provinceParam);
     }
   }, [searchParams, provinces]);
 
   const executeSearch = useCallback(
-    (searchQ?: string, searchCity?: string, searchProvinceId?: string) => {
+    (searchQ?: string, searchCity?: string, searchProvince?: string) => {
       const params = new URLSearchParams();
       const finalQ = searchQ?.trim() || "";
 
@@ -180,11 +180,8 @@ function SearchBoxInner({
 
       if (finalQ) params.set("q", finalQ);
       if (searchCity) params.set("city", searchCity);
+      if (searchProvince) params.set("province", searchProvince);
 
-      const pId =
-        searchProvinceId !== undefined ? searchProvinceId : tempProvince?._id;
-
-      if (pId) params.set("province", pId);
       if (smartPropertyType) params.set("propertyType", smartPropertyType);
       if (smartAdType) params.set("adType", smartAdType);
 
@@ -194,7 +191,7 @@ function SearchBoxInner({
         onSearch({
           q: finalQ || undefined,
           city: searchCity || undefined,
-          province: pId || undefined,
+          province: searchProvince || undefined,
           propertyType: smartPropertyType || undefined,
           adType: smartAdType || undefined,
         });
@@ -202,38 +199,45 @@ function SearchBoxInner({
         router.push(`/search?${params.toString()}`, { scroll: false });
       }
     },
-    [onSearch, router, tempProvince?._id],
+    [onSearch, router],
   );
 
   const handleSearchSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    executeSearch(query.trim() || undefined, selectedCityName || undefined);
+    executeSearch(
+      query.trim() || undefined,
+      selectedCityName || undefined,
+      selectedProvinceName || undefined,
+    );
   };
 
-  const handleProvinceSelect = (provId: string, provName: string) => {
-    setTempProvince({ _id: provId, name: provName });
-    setTempCity("");
+  const handleProvinceSelect = (provId: number, provName: string) => {
+    setTempProvince({ id: provId, name: provName });
+    setTempCity(null);
     setSearchLocationQuery("");
+    setCities(getCounties(provId));
     setStep("city");
   };
 
   const handleConfirmLocationWithValues = (
     provName: string,
     cityName: string,
-    provId?: string,
   ) => {
     setSelectedProvinceName(provName);
     setSelectedCityName(cityName);
     setIsOpen(false);
     setSearchLocationQuery("");
-    executeSearch(query.trim() || undefined, cityName || undefined, provId);
+    executeSearch(
+      query.trim() || undefined,
+      cityName || undefined,
+      provName || undefined,
+    );
   };
 
   const handleConfirmLocation = () => {
     handleConfirmLocationWithValues(
       tempProvince?.name || "",
-      tempCity,
-      tempProvince?._id,
+      tempCity?.name || "",
     );
   };
 
@@ -243,13 +247,13 @@ function SearchBoxInner({
 
     setQuery("");
     setTempProvince(null);
-    setTempCity("");
+    setTempCity(null);
     setSelectedProvinceName("");
     setSelectedCityName("");
     setSearchLocationQuery("");
     setStep("province");
 
-    executeSearch(undefined, undefined, "");
+    executeSearch(undefined, undefined, undefined);
   };
 
   const saveLocationToBackend = async (payload: {
@@ -320,40 +324,61 @@ function SearchBoxInner({
           );
 
           const data = await response.json();
-          const city = data.city || data.municipality_zone || "نامشخص";
-          const province = data.state || "نامشخص";
+          const cityName = data.city || data.municipality_zone || "";
+          const provinceName = data.state || "";
 
+          // پیدا کردن استان با نام نرمال‌شده
           const foundProvince = provinces.find(
-            (p) => p?.name?.includes(province) || province.includes(p?.name),
+            (p) =>
+              normalizeName(p.Name) === normalizeName(provinceName) ||
+              normalizeName(p.Name).includes(normalizeName(provinceName)) ||
+              normalizeName(provinceName).includes(normalizeName(p.Name)),
           );
 
-          const provinceId = foundProvince ? foundProvince._id : "";
-
-          if (provinceId) {
+          if (foundProvince) {
             setTempProvince({
-              _id: provinceId,
-              name: foundProvince?.name || province,
+              id: foundProvince.Id,
+              name: foundProvince.Name,
             });
+            setSelectedProvinceName(foundProvince.Name);
+            setCities(getCounties(foundProvince.Id));
+            setStep("city");
           }
 
-          setTempCity(city);
-          setSelectedProvinceName(foundProvince?.name || province);
-          setSelectedCityName(city);
+          if (cityName && foundProvince) {
+            const counties = getCounties(foundProvince.Id);
+            const foundCity = counties.find(
+              (c) =>
+                normalizeName(c.Name) === normalizeName(cityName) ||
+                normalizeName(c.Name).includes(normalizeName(cityName)) ||
+                normalizeName(cityName).includes(normalizeName(c.Name)),
+            );
+            if (foundCity) {
+              setTempCity({ id: foundCity.Id, name: foundCity.Name });
+              setSelectedCityName(foundCity.Name);
+            } else {
+              setTempCity(null);
+              setSelectedCityName(cityName);
+            }
+          }
+
           setIsOpen(false);
-
-          const finalCity = city !== "نامشخص" ? city : undefined;
-
-          executeSearch(query.trim() || undefined, finalCity, provinceId);
+          const finalCity = cityName && cityName !== "نامشخص" ? cityName : undefined;
+          executeSearch(
+            query.trim() || undefined,
+            finalCity,
+            foundProvince?.Name || provinceName,
+          );
 
           await saveLocationToBackend({
             lat: latitude,
             lng: longitude,
-            province: foundProvince?.name || province,
+            province: foundProvince?.Name || provinceName,
             city: finalCity,
           });
 
           toast.success(
-            `موقعیت شما شناسایی شد: ${foundProvince?.name || province}، ${city}`,
+            `موقعیت شما شناسایی شد: ${foundProvince?.Name || provinceName}${cityName ? `، ${cityName}` : ''}`,
           );
         } catch (error) {
           console.error("خطا در سرویس نشان:", error);
@@ -375,12 +400,14 @@ function SearchBoxInner({
 
   const filteredProvinces = useMemo(() => {
     const safeSearch = searchLocationQuery.trim();
-    return provinces.filter((p) => p?.name?.includes(safeSearch));
+    if (!safeSearch) return provinces;
+    return provinces.filter((p) => p.Name.includes(safeSearch));
   }, [provinces, searchLocationQuery]);
 
   const filteredCities = useMemo(() => {
     const safeSearch = searchLocationQuery.trim();
-    return cities.filter((c) => c?.name?.includes(safeSearch));
+    if (!safeSearch) return cities;
+    return cities.filter((c) => c.Name.includes(safeSearch));
   }, [cities, searchLocationQuery]);
 
   const hasActiveFilters = Boolean(
@@ -392,6 +419,19 @@ function SearchBoxInner({
       ? `${selectedProvinceName}، ${selectedCityName}`
       : selectedCityName
     : selectedProvinceName || "همهٔ ایران";
+
+  if (!ready) {
+    return (
+      <div className={cn("w-full", className)}>
+        <div className="flex items-center gap-2 h-12 md:h-14 rounded-[22px] border border-orange-200/40 dark:border-orange-800/20 bg-background/80 px-3 animate-pulse">
+          <div className="w-9 h-9 rounded-xl bg-muted shrink-0" />
+          <div className="flex-1 h-4 rounded-lg bg-muted" />
+          <div className="w-px h-6 bg-border" />
+          <div className="w-24 md:w-32 h-9 rounded-xl bg-muted shrink-0" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSearchSubmit} className={cn("w-full", className)} dir="rtl">
@@ -550,8 +590,8 @@ function SearchBoxInner({
                     type="button"
                     onClick={() => {
                       setTempProvince(null);
-                      setTempCity("");
-                      handleConfirmLocationWithValues("", "", "");
+                      setTempCity(null);
+                      handleConfirmLocationWithValues("", "");
                     }}
                     className="flex items-center justify-between w-full px-4 py-3.5 rounded-2xl text-sm font-extrabold bg-orange-50 dark:bg-orange-950/25 text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-all"
                   >
@@ -561,12 +601,12 @@ function SearchBoxInner({
 
                   {filteredProvinces.map((prov) => (
                     <button
-                      key={prov._id}
+                      key={prov.Id}
                       type="button"
-                      onClick={() => handleProvinceSelect(prov._id, prov.name)}
+                      onClick={() => handleProvinceSelect(prov.Id, prov.Name)}
                       className="flex items-center justify-between w-full px-4 py-3.5 rounded-2xl text-sm font-bold text-right text-foreground hover:bg-muted/50 transition-all"
                     >
-                      <span>{prov.name}</span>
+                      <span>{prov.Name}</span>
                       <ChevronLeft className="w-4 h-4 text-muted-foreground/60" />
                     </button>
                   ))}
@@ -578,45 +618,43 @@ function SearchBoxInner({
                   <button
                     type="button"
                     onClick={() => {
-                      setTempCity("");
+                      setTempCity(null);
                       handleConfirmLocationWithValues(
                         tempProvince?.name || "",
                         "",
-                        tempProvince?._id,
                       );
                     }}
                     className={cn(
                       "flex items-center justify-between w-full px-4 py-3.5 rounded-2xl text-sm font-bold text-right transition-all",
-                      tempCity === ""
+                      tempCity === null
                         ? "text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/25"
                         : "text-foreground hover:bg-muted/50",
                     )}
                   >
                     <span>همه شهرهای {tempProvince?.name}</span>
-                    {tempCity === "" && <Check className="w-4 h-4" />}
+                    {tempCity === null && <Check className="w-4 h-4" />}
                   </button>
 
                   {filteredCities.map((city) => (
                     <button
-                      key={city._id}
+                      key={city.Id}
                       type="button"
                       onClick={() => {
-                        setTempCity(city.name);
+                        setTempCity({ id: city.Id, name: city.Name });
                         handleConfirmLocationWithValues(
                           tempProvince?.name || "",
-                          city.name,
-                          tempProvince?._id,
+                          city.Name,
                         );
                       }}
                       className={cn(
                         "flex items-center justify-between w-full px-4 py-3.5 rounded-2xl text-sm font-bold text-right transition-all",
-                        tempCity === city.name
+                        tempCity?.id === city.Id
                           ? "text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/25"
                           : "text-foreground hover:bg-muted/50",
                       )}
                     >
-                      <span>{city.name}</span>
-                      {tempCity === city.name && <Check className="w-4 h-4" />}
+                      <span>{city.Name}</span>
+                      {tempCity?.id === city.Id && <Check className="w-4 h-4" />}
                     </button>
                   ))}
                 </>

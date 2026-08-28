@@ -8,7 +8,8 @@ import { Conversation } from "@/services/api/message.api";
 import { useAuth } from "@/app/context/AuthContext";
 import { MessageCircle, Bell, ChevronLeft } from "lucide-react";
 import { getNotificationRolePath } from "@/lib/notification-utils";
-import { getImageUrl } from "@/lib/getImageUrl"; // ✅ helper مرکزی
+import { getImageUrl } from "@/lib/getImageUrl";
+import VerifiedBadge from "@/components/common/VerifiedBadge";
 
 interface ChatListProps {
   conversations: Conversation[];
@@ -35,8 +36,6 @@ export function ChatList({
     if (!otherUser) return "?";
     return otherUser.firstName?.[0] || otherUser.phone?.[0] || "?";
   };
-
-  // ❌ تابع محلی getImageUrl حذف شد و از helper مرکزی استفاده می‌کنیم
 
   if (loading) {
     return (
@@ -101,31 +100,35 @@ export function ChatList({
               )}
             >
               <div className="relative">
-               <Avatar className="h-12 w-12 shrink-0 border border-border/50 shadow-sm">
-  <AvatarImage
-    src={getImageUrl(otherUser?.avatar) || "/images/user.webp"}
-    alt={otherUser?.firstName || "کاربر"}
-    className="object-cover"
-  />
-  <AvatarFallback className="bg-primary/10 text-primary font-bold" />
-</Avatar>
+                <Avatar className="h-12 w-12 shrink-0 border border-border/50 shadow-sm">
+                  <AvatarImage
+                    src={getImageUrl(otherUser?.avatar) || "/images/user.webp"}
+                    alt={otherUser?.firstName || "کاربر"}
+                    className="object-cover"
+                  />
+                  <AvatarFallback className="bg-primary/10 text-primary font-bold" />
+                </Avatar>
               </div>
 
               <div className="flex-1 min-w-0 flex flex-col justify-center">
                 <div className="flex justify-between items-center mb-1">
-                  <p
-                    className={cn(
-                      "text-sm truncate transition-colors",
-                      hasUnread
-                        ? "font-extrabold text-foreground"
-                        : "font-semibold text-foreground/90",
-                      activeConversationId === conv._id && "text-primary",
-                    )}
-                  >
-                    {otherUser
-                      ? `${otherUser.firstName || ""} ${otherUser.lastName || ""}`
-                      : "کاربر"}
-                  </p>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Link
+                      href={`/profile/${otherUser?._id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className={cn(
+                        "text-sm truncate transition-colors hover:underline underline-offset-4",
+                        hasUnread
+                          ? "font-extrabold text-foreground"
+                          : "font-semibold text-foreground/90",
+                        activeConversationId === conv._id && "text-primary",
+                      )}
+                    >
+                      {otherUser
+                        ? `${otherUser.firstName || ""} ${otherUser.lastName || ""}`
+                        : "کاربر"}
+                    </Link>
+{(otherUser as any)?.isVerified && <VerifiedBadge size="sm" />}                  </div>
                   <span
                     className={cn(
                       "text-[10px] shrink-0",

@@ -67,7 +67,11 @@ import {
   getChatStats,
   deleteConversationAdmin,
   deleteMessageAdmin,
-} from "../controllers/conversation.controller"; // ← مسیر واقعی کنترلر
+} from "../controllers/conversation.controller";
+import {
+  getUserBehaviorReport,
+  downloadBehaviorReport,
+} from "../controllers/super-admin.controller";
 
 const router = Router();
 
@@ -1023,6 +1027,26 @@ router.patch(
   protect,
   hasPermission("settings:write"),
   toggleKeyword,
+);
+
+
+// ════════════ گزارش رفتار کاربر (برای مدیر ارشد) ════════════
+// backend/src/routes/super-admin.routes.ts (قسمت انتهایی)
+
+// ════════════ گزارش رفتار کاربر (برای مدیر ارشد) ════════════
+// با استفاده از superAdminOnly
+router.get(
+  "/user-behavior-report",
+  protect,
+  superAdminOnly,
+  getUserBehaviorReport
+);
+
+router.post(
+  "/user-behavior-report/download",
+  protect,
+  superAdminOnly,
+  downloadBehaviorReport
 );
 
 export default router;

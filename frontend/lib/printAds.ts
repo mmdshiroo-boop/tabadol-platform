@@ -1,10 +1,6 @@
-/* ═══════════════════════════════════════════════════════════════════════════════
-   printAds.ts — تولید PDF و چاپ حرفه‌ای آگهی‌ها (مشاوران املاک)
-   نسخه بهبودیافته: رفع مشکل RTL، چیدمان دقیق A4، مدیریت صحیح تصاویر و واترمارک
-   ═══════════════════════════════════════════════════════════════════════════════ */
+// lib/printAds.ts — نسخه pdfmake با فونت پیش‌فرض
 
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+import pdfMake from "pdfmake/build/pdfmake";
 
 /* ═══════════════════════════════════════════════════════════════════
    TYPES
@@ -85,7 +81,7 @@ export interface PrintOptions {
   agencyName?: string;
   agentName?: string;
   baseUrl?: string;
-  watermarkText?: string; // متن واترمارک دلخواه
+  watermarkImageUrl?: string;
   onProgress?: (msg: string) => void;
 }
 
@@ -173,9 +169,9 @@ export function mapBackendAdToPrintAd(raw: any): PrintAd {
    ═══════════════════════════════════════════════════════════════════ */
 
 const PERSIAN_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
-const toFa = (num: number | string | undefined | null): string => {
+const toFa = (num: number | string | null | undefined): string => {
   if (num == null) return "";
-  return num.toString().replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[parseInt(d)]);
+  return num.toString().replace(/\d/g, (d) => PERSIAN_DIGITS[parseInt(d)]);
 };
 
 const formatPrice = (
@@ -323,11 +319,6 @@ const LAND_USAGE_LABELS: Record<string, string> = {
 const L = (map: Record<string, string>, val: string | undefined): string =>
   val ? map[val] || val : "";
 
-const row = (label: string, value: string): string =>
-  value ? `<td class="dl">${label}</td><td class="dv">${value}</td>` : "";
-
-const tag = (text: string): string => `<span class="ft">${text}</span>`;
-
 const formatFloor = (floor?: number | string): string => {
   if (floor === undefined || floor === null) return "نامشخص";
   if (floor === 0 || floor === "0") return "همکف";
@@ -335,8 +326,18 @@ const formatFloor = (floor?: number | string): string => {
 };
 
 /* ═══════════════════════════════════════════════════════════════════
-   IMAGE LOADER (Base64 با CORS اجباری)
+   بارگذاری تصاویر
    ═══════════════════════════════════════════════════════════════════ */
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary);
+}
 
 async function loadImagesAsBase64(
   images: string[],
@@ -364,7 +365,7 @@ async function loadImagesAsBase64(
           reader.readAsDataURL(blob);
         });
       } catch {
-        return url; // fallback to original URL
+        return url;
       }
     }),
   );
@@ -373,180 +374,21 @@ async function loadImagesAsBase64(
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   FONT LOADER — بارگذاری اجباری وزیرمتن
+   ساخت سند PDF برای یک آگهی
    ═══════════════════════════════════════════════════════════════════ */
 
-async function ensureVazirmatnFont() {
-  const fontUrl =
-    "https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css";
-  try {
-    if (!document.querySelector(`link[href="${fontUrl}"]`)) {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = fontUrl;
-      document.head.appendChild(link);
-    }
-    await document.fonts.ready;
-    await document.fonts.load("14px Vazirmatn");
-  } catch {
-    // Fallback
-  }
-}
+async function buildSingleAdDocument(ad: PrintAd, options?: PrintOptions) {
+  const baseUrl =
+    options?.baseUrl ||
+    process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") ||
+    "http://localhost:5001";
 
-/* ═══════════════════════════════════════════════════════════════════
-   BASE CSS (طراحی مدرن و کلاسیک با جدول و بوردر + استایل واترمارک)
-   ═══════════════════════════════════════════════════════════════════ */
-
-const BASE_CSS = `
-  @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
-
-  @page { size: A4; margin: 0; }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    font-family: 'Vazirmatn', Tahoma, Arial, sans-serif;
-    color: #1f2937;
-    background: #e5e7eb;
-    font-size: 11px;
-    line-height: 1.8;
-    direction: rtl;
-    -webkit-font-smoothing: antialiased;
-  }
-
-  /* تنظیم دقیق کادر صفحه برای پرینت A4 */
-  .page-container {
-    width: 794px;
-    background: #ffffff;
-    margin: 0 auto;
-    padding: 30px 40px;
-    position: relative;
-    overflow: hidden;
-  }
-
-  /* استایل واترمارک */
-  .watermark {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) rotate(-35deg);
-    font-size: 70px;
-    font-weight: 900;
-    color: rgba(209, 213, 219, 0.22);
-    z-index: 1000;
-    pointer-events: none;
-    user-select: none;
-    white-space: nowrap;
-    text-transform: uppercase;
-    letter-spacing: 4px;
-  }
-
-  /* سربرگ کلاسیک و رسمی */
-  .print-header {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    padding-bottom: 16px;
-    margin-bottom: 20px;
-    border-bottom: 3px double #9ca3af;
-  }
-  
-  .agency-info h1 { font-size: 22px; font-weight: 900; color: #111827; margin-bottom: 4px; }
-  .agency-info p { font-size: 11px; color: #4b5563; font-weight: 500; }
-  .print-meta { text-align: right; font-size: 10px; color: #6b7280; line-height: 1.8; border-right: 2px solid #e5e7eb; padding-right: 12px; }
-
-  /* استایل جدول‌ها (بوردر دار و منظم) */
-  .styled-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 18px;
-    border: 1px solid #d1d5db;
-    border-radius: 4px;
-    table-layout: fixed;
-  }
-  .styled-table td {
-    padding: 8px 12px;
-    border: 1px solid #d1d5db;
-    font-size: 11px;
-    text-align: right;
-    vertical-align: middle;
-  }
-  .styled-table .dl {
-    width: 18%;
-    background-color: #f3f4f6;
-    font-weight: 700;
-    color: #4b5563;
-  }
-  .styled-table .dv {
-    width: 32%;
-    color: #111827;
-    font-weight: 600;
-  }
-
-  /* تگ‌ها و امکانات */
-  .feature-tag, .ft {
-    display: inline-flex;
-    align-items: center;
-    padding: 6px 12px;
-    font-size: 10px;
-    font-weight: 700;
-    color: #374151;
-    background: #f9fafb;
-    border: 1px solid #d1d5db;
-    border-radius: 4px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-  }
-
-  /* جعبه توضیحات */
-  .desc-box {
-    border: 1px solid #d1d5db;
-    padding: 12px;
-    border-radius: 6px;
-    background: #fafafa;
-    margin-bottom: 16px;
-  }
-  .section-title {
-    font-size: 13px;
-    font-weight: 800;
-    color: #1f2937;
-    margin-bottom: 8px;
-    display: inline-block;
-    border-bottom: 2px solid #ea580c;
-    padding-bottom: 4px;
-  }
-
-  /* پانویس */
-  .print-footer {
-    margin-top: 20px;
-    padding-top: 12px;
-    border-top: 1px solid #d1d5db;
-    display: flex;
-    justify-content: space-between;
-    font-size: 9px;
-    color: #6b7280;
-  }
-
-  .bulk-card, .single-ad { break-inside: avoid; }
-
-  @media print {
-    body { background: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .page-container { padding: 0; width: 100%; margin: 0; }
-  }
-`;
-
-/* ═══════════════════════════════════════════════════════════════════
-   SINGLE AD HTML (نمای کامل یک آگهی)
-   ═══════════════════════════════════════════════════════════════════ */
-
-function singleAdHTML(ad: PrintAd, imgSrcs: string[]): string {
-  const mainImg = imgSrcs[0] || "";
-  const galleryImgs = imgSrcs.slice(1, 4);
+  const imageBase64List = await loadImagesAsBase64(ad.images || [], baseUrl);
 
   const features: string[] = [];
   if (ad.hasElevator) features.push("آسانسور");
   if (ad.hasParking)
-    features.push(
-      `پارکینگ${ad.parkingCount ? ` (${toFa(ad.parkingCount)})` : ""}`,
-    );
+    features.push(`پارکینگ${ad.parkingCount ? ` (${toFa(ad.parkingCount)})` : ""}`);
   if (ad.hasStorage) features.push("انباری");
   if (ad.hasBalcony) features.push("بالکن");
   if (ad.hasYard) features.push("حیاط / باغچه");
@@ -558,444 +400,219 @@ function singleAdHTML(ad: PrintAd, imgSrcs: string[]): string {
   if (ad.hasKitchen) features.push("آشپزخانه");
   if (ad.hasJacuzzi) features.push("جکوزی");
 
-  const tableRows: string[] = [];
-  tableRows.push(row("نوع ملک", L(PROPERTY_LABELS, ad.propertyType)));
-  tableRows.push(row("نوع معامله", L(AD_TYPE_LABELS, ad.adType)));
-  tableRows.push(row("متراژ", ad.area ? `${toFa(ad.area)} متر مربع` : ""));
-  if (ad.buildingArea && ad.buildingArea !== ad.area)
-    tableRows.push(row("زیربنا", `${toFa(ad.buildingArea)} متر مربع`));
-  tableRows.push(row("تعداد اتاق", ad.rooms ? toFa(ad.rooms) : ""));
-  tableRows.push(row("طبقه واحد", formatFloor(ad.floor)));
-  tableRows.push(row("تعداد طبقات", ad.floorCount ? toFa(ad.floorCount) : ""));
-  if (ad.unitsPerFloor)
-    tableRows.push(row("واحد در هر طبقه", toFa(ad.unitsPerFloor)));
-  tableRows.push(row("سال ساخت", ad.yearBuilt ? toFa(ad.yearBuilt) : ""));
-  if (ad.buildingAge)
-    tableRows.push(row("سن بنا", `${toFa(ad.buildingAge)} سال`));
-  tableRows.push(row("نوع سند", L(DOC_TYPE_LABELS, ad.documentType)));
-  tableRows.push(row("کاربری ملک", L(USAGE_LABELS, ad.usage)));
-  tableRows.push(row("سیستم گرمایش", L(HEATING_LABELS, ad.heatingSystem)));
-  tableRows.push(row("سیستم سرمایش", L(COOLING_LABELS, ad.coolingSystem)));
-  tableRows.push(row("کف‌پوش", L(FLOORING_LABELS, ad.flooring)));
-  tableRows.push(row("نما", L(FACADE_LABELS, ad.buildingFacade)));
-  if (ad.buildingOrientation)
-    tableRows.push(row("جهت ساختمان", ad.buildingOrientation));
-  if (ad.unitOrientation) tableRows.push(row("جهت واحد", ad.unitOrientation));
-  if (ad.furnishingStatus)
-    tableRows.push(row("مبله‌سازی", L(FURNISHING_LABELS, ad.furnishingStatus)));
-  if (ad.renovationStatus)
-    tableRows.push(row("بازسازی", L(RENOVATION_LABELS, ad.renovationStatus)));
-  if (ad.rentalPricePerNight)
-    tableRows.push(row("اجاره شبانه", formatPrice(ad.rentalPricePerNight)));
+  const specRows: any[] = [
+    [{ text: "نوع ملک", style: "label" }, L(PROPERTY_LABELS, ad.propertyType)],
+    [{ text: "نوع معامله", style: "label" }, L(AD_TYPE_LABELS, ad.adType)],
+    [{ text: "متراژ", style: "label" }, ad.area ? `${toFa(ad.area)} متر مربع` : "—"],
+    [{ text: "اتاق", style: "label" }, ad.rooms ? toFa(ad.rooms) : "—"],
+    [{ text: "طبقه", style: "label" }, formatFloor(ad.floor)],
+    [{ text: "کل طبقات", style: "label" }, ad.floorCount ? toFa(ad.floorCount) : "—"],
+    [{ text: "سال ساخت", style: "label" }, ad.yearBuilt ? toFa(ad.yearBuilt) : "—"],
+    [{ text: "سن بنا", style: "label" }, ad.buildingAge ? `${toFa(ad.buildingAge)} سال` : "—"],
+    [{ text: "سند", style: "label" }, L(DOC_TYPE_LABELS, ad.documentType)],
+    [{ text: "کاربری", style: "label" }, L(USAGE_LABELS, ad.usage)],
+    [{ text: "گرمایش", style: "label" }, L(HEATING_LABELS, ad.heatingSystem)],
+    [{ text: "سرمایش", style: "label" }, L(COOLING_LABELS, ad.coolingSystem)],
+    [{ text: "کف‌پوش", style: "label" }, L(FLOORING_LABELS, ad.flooring)],
+    [{ text: "نما", style: "label" }, L(FACADE_LABELS, ad.buildingFacade)],
+  ];
 
-  tableRows.push(row("استان", ad.province || ""));
-  tableRows.push(row("شهر", ad.city || ""));
-  if (ad.district) tableRows.push(row("منطقه", ad.district));
-  tableRows.push(row("آدرس", ad.address || ad.fullAddress || ""));
+  const filteredSpecRows = specRows.filter((row) => row[1] && row[1] !== "—");
 
-  const validRows = tableRows.filter(Boolean);
-  const combinedTableRows: string[] = [];
-  for (let i = 0; i < validRows.length; i += 2) {
-    const col1 = validRows[i];
-    const col2 = validRows[i + 1] || '<td class="dl"></td><td class="dv"></td>';
-    combinedTableRows.push(`<tr>${col1}${col2}</tr>`);
-  }
+  const images = imageBase64List.slice(0, 4).map((img) => ({
+    image: img,
+    width: 150,
+    margin: [0, 5],
+  }));
 
-  const extraProps = (ad.additionalProperties || []).filter(
-    (p) => p.name && p.value,
-  );
-  const combinedExtraRows: string[] = [];
-  const validExtra = extraProps.map((p) => row(p.name, p.value));
-  for (let i = 0; i < validExtra.length; i += 2) {
-    const col1 = validExtra[i];
-    const col2 =
-      validExtra[i + 1] || '<td class="dl"></td><td class="dv"></td>';
-    combinedExtraRows.push(`<tr>${col1}${col2}</tr>`);
-  }
-
-  return `
-  <div class="single-ad">
-    
-    <!-- عنوان و قیمت -->
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border: 1px solid #d1d5db; padding: 14px; border-radius: 8px; background: #f8fafc;">
-      <div style="max-width: 65%;">
-        <h2 style="font-size:22px; font-weight:900; color:#111827; margin-bottom:6px; line-height:1.4;">${ad.title}</h2>
-        <div style="font-size:12px; color:#4b5563; display: flex; gap: 8px; align-items: center;">
-          <span>📍 ${ad.province ? `${ad.province}، ` : ""}${ad.city}${ad.district ? `، ${ad.district}` : ""}</span>
-        </div>
-      </div>
-      <div style="text-align:left; background: #fff; padding: 10px 16px; border-radius: 6px; border: 1px solid #e5e7eb; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-        <div style="font-size:20px; font-weight:900; color:#ea580c;">${formatPrice(ad.price, ad.priceString, ad.isPriceNegotiable)}</div>
-        ${ad.rentPrice ? `<div style="font-size:12px; color:#4b5563; margin-top:4px;">اجاره: <span style="font-weight:700;">${formatPrice(ad.rentPrice)}</span></div>` : ""}
-        ${ad.mortgagePrice ? `<div style="font-size:12px; color:#4b5563; margin-top:4px;">رهن: <span style="font-weight:700;">${formatPrice(ad.mortgagePrice)}</span></div>` : ""}
-        ${ad.depositPrice ? `<div style="font-size:12px; color:#4b5563; margin-top:4px;">ودیعه: <span style="font-weight:700;">${formatPrice(ad.depositPrice)}</span></div>` : ""}
-      </div>
-    </div>
-
-    <!-- گالری تصاویر -->
-    <div style="display:flex; gap:12px; height:240px; margin-bottom:20px;">
-      ${
-        mainImg
-          ? `<div style="flex:3; border-radius:8px; border:1px solid #d1d5db; box-shadow: 0 2px 4px rgba(0,0,0,0.05); background-image: url('${mainImg}'); background-size: cover; background-position: center;"></div>`
-          : `<div style="flex:3; border-radius:8px; border:1px dashed #cbd5e1; display:flex; align-items:center; justify-content:center; background:#f8fafc; color:#94a3b8;">بدون تصویر</div>`
-      }
-      ${
-        galleryImgs.length > 0
-          ? `<div style="flex:1; display:flex; flex-direction:column; gap:10px;">
-             ${galleryImgs
-               .map(
-                 (src) => `
-               <div style="flex:1; border-radius:6px; border:1px solid #d1d5db; background-image: url('${src}'); background-size: cover; background-position: center;"></div>
-             `,
-               )
-               .join("")}
-            </div>`
-          : ""
-      }
-    </div>
-
-    <!-- جدول مشخصات -->
-    ${
-      combinedTableRows.length > 0
-        ? `<div>
-           <div class="section-title">مشخصات کامل ملک</div>
-           <table class="styled-table">
-             <tbody>${combinedTableRows.join("\n")}</tbody>
-           </table>
-          </div>`
-        : ""
-    }
-
-    <!-- امکانات رفاهی -->
-    ${
+  const docDefinition: any = {
+    pageSize: "A4",
+    pageMargins: [40, 40, 40, 40],
+    // حذف defaultStyle.font برای استفاده از فونت پیش‌فرض
+    content: [
+      {
+        columns: [
+          {
+            width: "65%",
+            stack: [
+              { text: ad.title, style: "title" },
+              {
+                text: `${ad.province ? ad.province + "، " : ""}${ad.city}${ad.district ? "، " + ad.district : ""}`,
+                style: "location",
+              },
+            ],
+          },
+          {
+            width: "35%",
+            stack: [
+              {
+                text: formatPrice(ad.price, ad.priceString, ad.isPriceNegotiable),
+                style: "price",
+              },
+              ad.rentPrice ? { text: `اجاره: ${formatPrice(ad.rentPrice)}`, style: "subPrice" } : {},
+              ad.mortgagePrice ? { text: `رهن: ${formatPrice(ad.mortgagePrice)}`, style: "subPrice" } : {},
+              ad.depositPrice ? { text: `ودیعه: ${formatPrice(ad.depositPrice)}`, style: "subPrice" } : {},
+            ],
+            alignment: "left",
+          },
+        ],
+        margin: [0, 0, 0, 20],
+      },
+      images.length > 0
+        ? {
+            table: {
+              widths: ["*", "*"],
+              body: [
+                images.map((img) => ({
+                  image: img.image,
+                  width: 150,
+                  margin: [0, 2],
+                })),
+              ],
+            },
+            layout: "noBorders",
+          }
+        : {},
+      { text: "مشخصات ملک", style: "sectionTitle", margin: [0, 20, 0, 10] },
+      {
+        table: {
+          headerRows: 1,
+          widths: ["30%", "70%"],
+          body: [
+            [{ text: "شاخص", style: "tableHeader" }, { text: "مقدار", style: "tableHeader" }],
+            ...filteredSpecRows.map((row) => [
+              { text: row[0].text, style: "label" },
+              { text: row[1], style: "value" },
+            ]),
+          ],
+        },
+        layout: {
+          fillColor: (rowIndex: number) => (rowIndex % 2 === 0 ? "#f8fafc" : "#ffffff"),
+          hLineColor: "#e2e8f0",
+          vLineColor: "#e2e8f0",
+          paddingLeft: () => 8,
+          paddingRight: () => 8,
+          paddingTop: () => 6,
+          paddingBottom: () => 6,
+        },
+      },
       features.length > 0
-        ? `<div style="margin-bottom:18px;">
-           <div class="section-title">امکانات رفاهی</div>
-           <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:4px;">${features.map(tag).join("")}</div>
-          </div>`
-        : ""
-    }
-
-    <!-- ویژگی‌های اضافی -->
-    ${
-      combinedExtraRows.length > 0
-        ? `<div>
-           <div class="section-title">سایر ویژگی‌ها</div>
-           <table class="styled-table">
-             <tbody>${combinedExtraRows.join("\n")}</tbody>
-           </table>
-          </div>`
-        : ""
-    }
-
-    <!-- توضیحات -->
-    ${
+        ? { text: "امکانات رفاهی", style: "sectionTitle", margin: [0, 20, 0, 10] }
+        : {},
+      features.length > 0
+        ? {
+            table: {
+              widths: features.map(() => "*"),
+              body: [features.map((f) => ({ text: f, style: "feature" }))],
+            },
+            layout: "noBorders",
+          }
+        : {},
       ad.description
-        ? `<div class="desc-box">
-           <div class="section-title" style="margin-bottom:10px;">توضیحات تکمیلی</div>
-           <p style="font-size:12px; color:#374151; line-height:2.2; text-align:justify;">${ad.description}</p>
-          </div>`
-        : ""
-    }
+        ? { text: "توضیحات تکمیلی", style: "sectionTitle", margin: [0, 20, 0, 10] }
+        : {},
+      ad.description ? { text: ad.description, style: "description" } : {},
+    ],
+    styles: {
+      headerTitle: { fontSize: 14, bold: true, color: "#ea580c" },
+      title: { fontSize: 18, bold: true, color: "#0f172a" },
+      location: { fontSize: 11, color: "#4b5563", margin: [0, 4, 0, 0] },
+      price: { fontSize: 20, bold: true, color: "#ea580c" },
+      subPrice: { fontSize: 10, color: "#6b7280" },
+      sectionTitle: { fontSize: 14, bold: true, color: "#ea580c", margin: [0, 20, 0, 10] },
+      label: { fontSize: 9, color: "#475569", bold: true },
+      value: { fontSize: 10, color: "#0f172a" },
+      tableHeader: { fontSize: 10, bold: true, color: "#ffffff", fillColor: "#f97316", alignment: "center" },
+      feature: { fontSize: 9, color: "#0f172a", fillColor: "#f1f5f9", margin: [2, 2] },
+      description: { fontSize: 10, color: "#334155", lineHeight: 1.6 },
+      footer: { fontSize: 8, color: "#64748b" },
+    },
+  };
 
-  </div>`;
+  return docDefinition;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   BULK CARD HTML (کارت فشرده برای پرینت دسته‌ای)
+   ساخت سند PDF برای لیست آگهی‌ها
    ═══════════════════════════════════════════════════════════════════ */
 
-function bulkCardHTML(ad: PrintAd, imgSrc: string): string {
-  const details: string[] = [];
-  if (ad.area) details.push(`${toFa(ad.area)} م²`);
-  if (ad.rooms) details.push(`${toFa(ad.rooms)} خوابه`);
-  if (ad.floor != null) details.push(`طبقه ${formatFloor(ad.floor)}`);
-  if (ad.yearBuilt) details.push(`ساخت ${toFa(ad.yearBuilt)}`);
+async function buildBulkAdsDocument(ads: PrintAd[], options?: PrintOptions) {
+  const baseUrl =
+    options?.baseUrl ||
+    process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") ||
+    "http://localhost:5001";
 
-  return `
-    <div class="bulk-card" style="border:1px solid #d1d5db; border-radius:8px; overflow:hidden; background:#fff; display:flex; flex-direction:column;">
-      ${
-        imgSrc
-          ? `<div style="width:100%; height:140px; border-bottom:1px solid #e5e7eb; background-image: url('${imgSrc}'); background-size: cover; background-position: center;"></div>`
-          : `<div style="width:100%; height:140px; background:#f8fafc; display:flex; align-items:center; justify-content:center; color:#94a3b8; border-bottom:1px solid #e5e7eb;">بدون تصویر</div>`
-      }
-      <div style="padding:12px; flex:1;">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
-          <h3 style="font-size:13px; font-weight:800; color:#111827; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:60%;">${ad.title}</h3>
-          <div style="font-size:13px; font-weight:900; color:#ea580c; white-space:nowrap;">${formatPrice(ad.price, ad.priceString, ad.isPriceNegotiable)}</div>
-        </div>
-        <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;">
-          ${ad.propertyType ? `<span class="ft">${L(PROPERTY_LABELS, ad.propertyType)}</span>` : ""}
-          ${ad.adType ? `<span class="ft">${L(AD_TYPE_LABELS, ad.adType)}</span>` : ""}
-        </div>
-        <div style="font-size:11px; color:#4b5563; font-weight:600; margin-bottom:6px;">${details.join(" &nbsp;|&nbsp; ")}</div>
-        <div style="font-size:10px; color:#6b7280;">📍 ${ad.province ? `${ad.province}، ` : ""}${ad.city}${ad.district ? `، ${ad.district}` : ""}</div>
-      </div>
-      <div style="display:flex; justify-content:space-between; padding:8px 12px; background:#f9fafb; border-top:1px solid #e5e7eb; font-size:10px; color:#6b7280; font-weight:600;">
-        <span>کد: ${ad._id ? ad._id.slice(-6).toUpperCase() : "—"}</span>
-        ${ad.phone ? `<span>تلفن: <span style="direction:ltr; display:inline-block;">${ad.phone}</span></span>` : ""}
-      </div>
-    </div>`;
-}
+  const allImages = await Promise.all(
+    ads.map((ad) => loadImagesAsBase64(ad.images || [], baseUrl)),
+  );
 
-/* ═══════════════════════════════════════════════════════════════════
-   FULL PAGE BUILDER (شامل بخش واترمارک)
-   ═══════════════════════════════════════════════════════════════════ */
-
-function buildFullHTML(
-  ads: PrintAd[],
-  allImgSrcs: string[][],
-  title: string,
-  agencyName?: string,
-  agentName?: string,
-  watermarkText?: string,
-): string {
-  const today = new Date().toLocaleDateString("fa-IR");
-  const now = new Date().toLocaleTimeString("fa-IR", {
-    hour: "2-digit",
-    minute: "2-digit",
+  const cards = ads.map((ad, i) => {
+    const img = allImages[i]?.[0] || "";
+    return [
+      {
+        columns: [
+          img
+            ? { image: img, width: 100, margin: [0, 0, 10, 0] }
+            : { text: "بدون تصویر", width: 100, alignment: "center", margin: [0, 0, 10, 0] },
+          {
+            width: "*",
+            stack: [
+              { text: ad.title, style: "cardTitle" },
+              { text: formatPrice(ad.price, ad.priceString, ad.isPriceNegotiable), style: "cardPrice" },
+              {
+                text: `${ad.city}${ad.district ? "، " + ad.district : ""}`,
+                style: "cardLocation",
+              },
+              {
+                text: `${toFa(ad.area || "")} م² | ${ad.rooms ? toFa(ad.rooms) + " خوابه" : ""} | ${formatFloor(ad.floor)}`,
+                style: "cardMeta",
+              },
+            ],
+          },
+        ],
+        margin: [0, 0, 0, 10],
+      },
+    ];
   });
-  const isSingle = ads.length === 1;
-  const theAd = isSingle ? ads[0] : null;
 
-  const adsHTML = isSingle
-    ? singleAdHTML(ads[0], allImgSrcs[0])
-    : `<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
-        ${ads.map((ad, i) => bulkCardHTML(ad, allImgSrcs[i]?.[0] || "")).join("")}
-      </div>`;
+  const docDefinition: any = {
+    pageSize: "A4",
+    pageMargins: [40, 40, 40, 40],
+    content: cards.flat(),
+    styles: {
+      headerTitle: { fontSize: 14, bold: true, color: "#ea580c" },
+      cardTitle: { fontSize: 12, bold: true, color: "#0f172a" },
+      cardPrice: { fontSize: 14, bold: true, color: "#ea580c" },
+      cardLocation: { fontSize: 9, color: "#4b5563" },
+      cardMeta: { fontSize: 8, color: "#64748b" },
+    },
+  };
 
-  // تزریق متن واترمارک در صورت وجود
-  const watermarkHTML = watermarkText
-    ? `<div class="watermark">${watermarkText}</div>`
-    : "";
-
-  return `<!DOCTYPE html>
-<html lang="fa" dir="rtl">
-<head>
-  <meta charset="UTF-8" />
-  <title>${title}</title>
-  <style>${BASE_CSS}</style>
-</head>
-<body>
-  <div class="page-container">
-      ${watermarkHTML}
-      <div class="print-header">
-        <div class="agency-info">
-          <h1>${agencyName || "سیستم جامع املاک"}</h1>
-          ${agentName ? `<p>مشاور پیگیری: <span style="font-weight:700; color:#111827;">${agentName}</span></p>` : ""}
-        </div>
-        <div class="print-meta">
-          <div style="margin-bottom:2px;">تاریخ چاپ: <span style="font-weight:700;">${today}</span></div>
-          <div style="margin-bottom:2px;">ساعت: <span style="font-weight:700;">${now}</span></div>
-          <div>تعداد آگهی: <span style="font-weight:700;">${toFa(ads.length)} مورد</span></div>
-        </div>
-      </div>
-
-      ${adsHTML}
-
-      <div class="print-footer">
-        <div>
-          ${isSingle && theAd?.phone ? `تلفن تماس: <span style="font-weight:700; direction:ltr; display:inline-block;">${theAd.phone}</span>` : ""}
-          ${isSingle && theAd?._id ? ` | کد آگهی: <span style="font-weight:700; text-transform:uppercase;">${theAd._id.slice(-8)}</span>` : ""}
-        </div>
-        <div>این سند توسط سیستم اتوماسیون املاک تولید شده و معتبر می‌باشد.</div>
-      </div>
-  </div>
-</body>
-</html>`;
+  return docDefinition;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   PDF GENERATOR (html2canvas + jsPDF)
-   ═══════════════════════════════════════════════════════════════════ */
-
-async function generatePDF(
-  html: string,
-  filename: string,
-  onProgress?: (msg: string) => void,
-): Promise<void> {
-  onProgress?.("در حال آماده‌سازی قالب...");
-
-  await ensureVazirmatnFont();
-
-  const iframe = document.createElement("iframe");
-  iframe.style.position = "fixed";
-  iframe.style.top = "-9999px";
-  iframe.style.left = "-9999px";
-  iframe.style.width = "794px";
-  iframe.style.height = "1123px";
-  iframe.style.border = "none";
-  iframe.style.zIndex = "-9999";
-  document.body.appendChild(iframe);
-
-  try {
-    const doc = iframe.contentWindow?.document;
-    if (!doc) throw new Error("عدم دسترسی به سند Iframe");
-
-    doc.open();
-    doc.write(html);
-    doc.close();
-
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    const elementToPrint = doc.querySelector(".page-container") as HTMLElement;
-    if (!elementToPrint) {
-      throw new Error("عنصر صفحه (page-container) یافت نشد.");
-    }
-
-    iframe.style.height = `${elementToPrint.scrollHeight + 50}px`;
-
-    onProgress?.("در حال تولید فایل PDF...");
-
-    const canvas = await html2canvas(elementToPrint, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: "#ffffff",
-      logging: false,
-      width: 794,
-      windowWidth: 794,
-    });
-
-    if (!canvas.width || !canvas.height) {
-      throw new Error(
-        "خطا: محتوای تولید شده برای چاپ خالی است یا ارتفاع آن صفر است.",
-      );
-    }
-
-    const imgData = canvas.toDataURL("image/jpeg", 0.95);
-    const pdf = new jsPDF("p", "mm", "a4");
-
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth = pdfWidth;
-
-    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-    if (isNaN(imgHeight) || imgHeight <= 0) {
-      throw new Error("خطا در محاسبه ابعاد تصویر PDF.");
-    }
-
-    let heightLeft = imgHeight;
-    let position = 0;
-
-    pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
-    heightLeft -= pdfHeight;
-
-    while (heightLeft > 0) {
-      position = position - pdfHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
-    }
-
-    pdf.save(filename);
-    onProgress?.("عملیات موفق! PDF دانلود شد.");
-  } catch (error) {
-    console.error("PDF Generation Error: ", error);
-    alert("خطا در تولید PDF: " + (error as Error).message);
-  } finally {
-    if (document.body.contains(iframe)) {
-      document.body.removeChild(iframe);
-    }
-  }
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   PRINT WINDOW (مرورگر)
-   ═══════════════════════════════════════════════════════════════════ */
-
-function openPrintWindow(html: string) {
-  const w = window.open("", "_blank", "width=900,height=700,scrollbars=yes");
-  if (!w) {
-    alert("لطفاً پاپ‌آپ مرورگر را غیرفعال کنید و دوباره تلاش کنید.");
-    return;
-  }
-  w.document.write(html);
-  w.document.close();
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   PUBLIC API
-   ═══════════════════════════════════════════════════════════════════ */
-
-/* ═══════════════════════════════════════════════════════════════════
-   PUBLIC API
+   توابع عمومی
    ═══════════════════════════════════════════════════════════════════ */
 
 export async function printSingleAd(ad: PrintAd, options?: PrintOptions) {
-  const baseUrl = options?.baseUrl || process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:5001";
-  options?.onProgress?.("در حال بارگذاری تصاویر...");
-
-  const imgSrcs = await loadImagesAsBase64(ad.images || [], baseUrl);
-  const html = buildFullHTML(
-    [ad],
-    [imgSrcs],
-    `چاپ آگهی: ${ad.title}`,
-    options?.agencyName,
-    options?.agentName,
-    options?.watermarkText,
-  );
-  await generatePDF(
-    html,
-    `آگهی-${ad.title.slice(0, 30)}.pdf`,
-    options?.onProgress,
-  );
+  const docDefinition = await buildSingleAdDocument(ad, options);
+  pdfMake.createPdf(docDefinition).download(`آگهی-${ad.title.slice(0, 30)}.pdf`);
 }
 
 export async function printBulkAds(ads: PrintAd[], options?: PrintOptions) {
   if (ads.length === 0) return;
-  const baseUrl = options?.baseUrl || process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:5001";
-
-  options?.onProgress?.(`در حال بارگذاری تصاویر ${toFa(ads.length)} آگهی...`);
-  const allImgSrcs = await Promise.all(
-    ads.map(async (ad) => await loadImagesAsBase64(ad.images || [], baseUrl)),
-  );
-
-  const html = buildFullHTML(
-    ads,
-    allImgSrcs,
-    `لیست ${ads.length} آگهی`,
-    options?.agencyName,
-    options?.agentName,
-    options?.watermarkText,
-  );
-  await generatePDF(html, `لیست-آگهی‌ها.pdf`, options?.onProgress);
+  const docDefinition = await buildBulkAdsDocument(ads, options);
+  pdfMake.createPdf(docDefinition).download(`لیست-آگهی‌ها.pdf`);
 }
 
-export async function printSingleAdBrowser(
-  ad: PrintAd,
-  options?: PrintOptions,
-) {
-  const baseUrl = options?.baseUrl || process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:5001";
-  const imgSrcs = await loadImagesAsBase64(ad.images || [], baseUrl);
-  const html = buildFullHTML(
-    [ad],
-    [imgSrcs],
-    `چاپ آگهی: ${ad.title}`,
-    options?.agencyName,
-    options?.agentName,
-    options?.watermarkText,
-  );
-  openPrintWindow(html);
+export async function printSingleAdBrowser(ad: PrintAd, options?: PrintOptions) {
+  const docDefinition = await buildSingleAdDocument(ad, options);
+  pdfMake.createPdf(docDefinition).open();
 }
 
-export async function printBulkAdsBrowser(
-  ads: PrintAd[],
-  options?: PrintOptions,
-) {
+export async function printBulkAdsBrowser(ads: PrintAd[], options?: PrintOptions) {
   if (ads.length === 0) return;
-  const baseUrl = options?.baseUrl || process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:5001";
-  const allImgSrcs = await Promise.all(
-    ads.map(async (ad) => await loadImagesAsBase64(ad.images || [], baseUrl)),
-  );
-  const html = buildFullHTML(
-    ads,
-    allImgSrcs,
-    `لیست ${ads.length} آگهی`,
-    options?.agencyName,
-    options?.agentName,
-    options?.watermarkText,
-  );
-  openPrintWindow(html);
+  const docDefinition = await buildBulkAdsDocument(ads, options);
+  pdfMake.createPdf(docDefinition).open();
 }

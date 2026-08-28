@@ -14,14 +14,26 @@ import mongoose from "mongoose";
 import { Block } from "../models/Block.model";
 import { createAuditLog } from "../services/auditLog.service";
 import { AuditAction } from "../models/AuditLog.model";
-
+import { applyReferralCode, generateReferralCode, grantPointsIfNotGranted } from "../services/loyalty.service";
+import { LOYALTY_RULES } from "../config/loyalty";
+import { Follow } from "../models/Follow.model";
+import { addMemberByUserId } from "../services/agentClub.service";
+import { Agent } from "../models/Agent.model";
 // ==================== احراز هویت ====================
 
 // ثبت‌نام کاربر جدید (از طریق فرم معمولی - در صورت استفاده)
 export const register = async (req: Request, res: Response) => {
   try {
-    const { phone, nationalCode, password, firstName, lastName } = req.body;
+    const {
+      phone,
+      nationalCode,
+      password,
+      firstName,
+      lastName,
+      referralCode, // کد معرف
+    } = req.body;
 
+    // بررسی تکراری بودن کاربر
     const existingUser = await User.findOne({
       $or: [{ phone }, { nationalCode }],
     });
@@ -31,6 +43,7 @@ export const register = async (req: Request, res: Response) => {
         .json({ success: false, message: "کاربر قبلاً ثبت نام کرده است" });
     }
 
+    // ایجاد کاربر جدید
     const user = new User({
       phone,
       nationalCode,
@@ -41,13 +54,51 @@ export const register = async (req: Request, res: Response) => {
 
     await user.save();
 
+    // تولید کد معرف یکتا برای کاربر جدید
+    user.referralCode = await generateReferralCode();
+    await user.save();
+
+    // اعطای امتیاز ثبت‌نام
+    await grantPointsIfNotGranted(
+      user._id.toString(),
+      LOYALTY_RULES.REGISTRATION,
+      "registration",
+      "امتیاز ثبت‌نام"
+    );
+
+    // اگر کد معرف وارد شده باشد، آن را اعمال کن
+    if (referralCode) {
+      try {
+        await applyReferralCode(user._id.toString(), referralCode);
+      } catch (err: any) {
+        console.log("Invalid referral code:", err.message);
+      }
+
+      // 🆕 افزودن خودکار کاربر به باشگاه مشاور معرف
+      const referrer = await User.findOne({
+        referralCode: referralCode.toUpperCase(),
+      });
+      if (referrer && referrer.role === "agent") {
+        const agent = await Agent.findOne({ userId: referrer._id });
+        if (agent) {
+          try {
+            await addMemberByUserId(agent._id.toString(), user._id.toString());
+            console.log(`✅ کاربر ${user.phone} به باشگاه مشاور ${agent.firstName} اضافه شد`);
+          } catch (err) {
+            console.error("❌ افزودن به باشگاه ناموفق:", err);
+          }
+        }
+      }
+    }
+
+    // ساخت توکن
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET!,
       { expiresIn: "7d" },
     );
 
-    // اعلان به ادمین‌ها
+    // اطلاع‌رسانی به ادمین‌ها
     await notifyAdmins(
       "👤 کاربر جدید ثبت‌نام کرد",
       `کاربر جدید با شماره ${phone} در سایت ثبت‌نام کرد.`,
@@ -63,7 +114,7 @@ export const register = async (req: Request, res: Response) => {
       { userId: user._id, userPhone: phone },
     );
 
-    // لاگ تجاری: ثبت‌نام کاربر
+    // لاگ تجاری
     await createAuditLog({
       userId: user._id.toString(),
       action: AuditAction.USER_REGISTER,
@@ -73,6 +124,7 @@ export const register = async (req: Request, res: Response) => {
       req,
     });
 
+    // پاسخ نهایی
     res.status(201).json({
       success: true,
       data: {
@@ -229,6 +281,20 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
       return res
         .status(404)
         .json({ success: false, message: "کاربر یافت نشد" });
+    }
+
+    // 🆕 اعطای امتیاز تکمیل پروفایل (فقط یک بار)
+    const isProfileComplete =
+      user.firstName && user.lastName && user.email &&
+      user.province && user.city && user.district;
+
+    if (isProfileComplete) {
+      await grantPointsIfNotGranted(
+        req.user?._id.toString(),
+        LOYALTY_RULES.COMPLETE_PROFILE,
+        "complete_profile",
+        "تکمیل پروفایل"
+      );
     }
 
     // لاگ تجاری: ویرایش پروفایل
@@ -968,27 +1034,27 @@ export const verifyIdentity = async (req: AuthRequest, res: Response) => {
  * GET /api/users/public/:id
  */
 export const getPublicProfile = async (req: Request, res: Response) => {
-  // ... بدون تغییر
   try {
     const userId = req.params.id;
 
     const user = await User.findById(userId)
-      .select("firstName lastName avatar phone email role isVerified createdAt")
+      .select("firstName lastName avatar phone email role isVerified rating createdAt")
       .lean();
 
-    let activeAdsCount = 0;
-    try {
-      activeAdsCount = await Ad.countDocuments({ userId, status: "active" });
-    } catch (e) {}
+    if (!user) {
+      return res.status(404).json({ success: false, message: "کاربر یافت نشد" });
+    }
 
-    let recentAds: any[] = [];
-    try {
-      recentAds = await Ad.find({ userId, status: "active" })
+    const [activeAdsCount, recentAds, followers, following] = await Promise.all([
+      Ad.countDocuments({ userId, status: "active" }),
+      Ad.find({ userId, status: "active" })
         .select("title price city images createdAt")
         .sort({ createdAt: -1 })
         .limit(3)
-        .lean();
-    } catch (e) {}
+        .lean(),
+      Follow.countDocuments({ following: userId }),
+      Follow.countDocuments({ follower: userId }),
+    ]);
 
     res.json({
       success: true,
@@ -996,6 +1062,8 @@ export const getPublicProfile = async (req: Request, res: Response) => {
         ...user,
         adsCount: activeAdsCount,
         recentAds,
+        followers,
+        following,
       },
     });
   } catch (error) {

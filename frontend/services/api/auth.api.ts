@@ -22,6 +22,7 @@ export interface VerifyCodeData {
   nationalCode?: string;
   password?: string;
   email?: string;
+  referralCode?: string; // ✅ اضافه شد
 }
 
 // ✅ اضافه شد

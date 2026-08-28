@@ -1,5 +1,5 @@
 "use client";
-
+import L from "leaflet";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { MapPin, Navigation } from "lucide-react";
 import "leaflet/dist/leaflet.css";
@@ -135,6 +135,24 @@ export default function LocationPickerMap({
       }
     };
   }, []);
+
+  // ── همگام‌سازی مختصات اولیه با مارکر هنگام تغییر props ──
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    // اگر مختصات جدید با پیش‌فرض متفاوت است و مارکر وجود ندارد، بساز
+    if (initialLat !== 35.6892 || initialLng !== 51.389) {
+      if (markerRef.current) {
+        markerRef.current.setLatLng([initialLat, initialLng]);
+      } else if (customIconRef.current) {
+        markerRef.current = L.marker([initialLat, initialLng], {
+          icon: customIconRef.current,
+        }).addTo(map);
+      }
+      setSelectedCoords([initialLat, initialLng]);
+    }
+  }, [initialLat, initialLng]);
 
   // ── flyTo نرم وقتی مختصات تغییر می‌کنه ──
   useEffect(() => {

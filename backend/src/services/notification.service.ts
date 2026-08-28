@@ -1,9 +1,9 @@
 // backend/src/services/notification.service.ts
-import { Notification, NotificationType } from "../models/Notification.model";
-import { User } from "../models/User.model";
+import { User } from "../models";
+import { NotificationType } from "../models/Notification.model";
 import { UserNotificationSetting } from "../models/UserNotificationSetting.model";
 import { sendRealTimeNotification } from "../socket";
-
+import { Notification } from "../models/Notification.model";
 type NotificationRole =
   | "user"
   | "vip"

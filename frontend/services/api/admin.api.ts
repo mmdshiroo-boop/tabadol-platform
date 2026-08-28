@@ -1,5 +1,5 @@
-// frontend/services/api/admin.api.ts
 import apiClient from "./client";
+import { cookieAuditService } from "@/services/api/cookieAudit.api";
 
 // ==================== تایپ‌ها ====================
 
@@ -327,7 +327,7 @@ export const adminApi = {
     sortOrder?: "asc" | "desc";
   }) => {
     const response = await apiClient.get("/super-admin/audit-logs", { params });
-    return response.data; // شامل data, meta
+    return response.data;
   },
 
   // ==================== لاگ‌های ترافیک (PageView) ====================
@@ -344,14 +344,11 @@ export const adminApi = {
     sortOrder?: "asc" | "desc";
   }) => {
     const response = await apiClient.get("/super-admin/page-views", { params });
-    return response.data; // شامل data, meta
+    return response.data;
   },
 
   // ==================== مدیریت آگهی‌های ویژه (VIP و فوری) ====================
 
-  /**
-   * دریافت آگهی‌های ویژه (با فیلتر نوع و وضعیت)
-   */
   getSpecialAds: async (params?: {
     type?: "vip" | "urgent" | "all";
     status?: "active" | "expired" | "all";
@@ -366,9 +363,6 @@ export const adminApi = {
     };
   },
 
-  /**
-   * دریافت آگهی‌های VIP
-   */
   getVipAds: async (params?: {
     status?: "active" | "expired" | "all";
     page?: number;
@@ -378,9 +372,6 @@ export const adminApi = {
     return adminApi.getSpecialAds({ ...params, type: "vip" });
   },
 
-  /**
-   * دریافت آگهی‌های فوری
-   */
   getUrgentAds: async (params?: {
     status?: "active" | "expired" | "all";
     page?: number;
@@ -390,9 +381,6 @@ export const adminApi = {
     return adminApi.getSpecialAds({ ...params, type: "urgent" });
   },
 
-  /**
-   * دریافت آمار ویژه (تعداد کل و فعال)
-   */
   getSpecialStats: async () => {
     try {
       const [vipRes, urgentRes] = await Promise.all([
@@ -434,9 +422,6 @@ export const adminApi = {
     }
   },
 
-  /**
-   * فعال/غیرفعال کردن VIP
-   */
   toggleVipStatus: async (
     id: string,
     action: "activate" | "deactivate",
@@ -452,9 +437,6 @@ export const adminApi = {
     return response.data;
   },
 
-  /**
-   * فعال/غیرفعال کردن فوری
-   */
   toggleUrgentStatus: async (
     id: string,
     action: "activate" | "deactivate",
@@ -470,9 +452,6 @@ export const adminApi = {
     return response.data;
   },
 
-  /**
-   * تمدید VIP
-   */
   extendVip: async (id: string, extraDays: number) => {
     const response = await apiClient.post(`/ads/admin/${id}/vip/extend`, {
       extraDays,
@@ -480,13 +459,76 @@ export const adminApi = {
     return response.data;
   },
 
-  /**
-   * تمدید فوری
-   */
   extendUrgent: async (id: string, extraDays: number) => {
     const response = await apiClient.post(`/ads/admin/${id}/urgent/extend`, {
       extraDays,
     });
     return response.data;
+  },
+
+  getUserBehaviorReport: async (
+    userId: string,
+    params?: { startDate?: string; endDate?: string },
+  ) => {
+    const response = await apiClient.get("/super-admin/user-behavior-report", {
+      params: { userId, ...params },
+    });
+    return response.data.data;
+  },
+
+  downloadBehaviorReport: async (
+    userId: string,
+    format: "json" | "csv" | "txt" | "pdf",
+  ) => {
+    try {
+      // دریافت داده‌های کامل رفتار کاربر از endpoint مربوط به مودال
+      const detailsRes = await cookieAuditService.getUserDetails(userId);
+      const details = detailsRes?.data || detailsRes || {};
+
+      const mergedReport = {
+        user: details.user,
+        behavior: details.behavior || null,
+        viewedAds: details.viewedAds || [],
+        favorites: details.favorites || [],
+        favoritesCount: details.favoritesCount || 0,
+        interactionScore: details.interactionScore || 0,
+        scoreBreakdown: details.scoreBreakdown || null,
+        activityPeriod: details.activityPeriod || null,
+        stats: {
+          totalPageViews: details.activityPeriod?.totalPageViews || 0,
+          totalFavorites: details.favoritesCount || 0,
+          totalViewedAds: details.viewedAdsCount || 0,
+        },
+      };
+
+      const {
+        exportBehaviorReportToJSON,
+        exportBehaviorReportToCSV,
+        exportBehaviorReportToTXT,
+        exportBehaviorReportToPDF,
+      } = await import("@/lib/behaviorReportExport");
+
+      switch (format) {
+        case "json":
+          exportBehaviorReportToJSON(mergedReport, userId);
+          break;
+        case "csv":
+          exportBehaviorReportToCSV(mergedReport, userId);
+          break;
+        case "txt":
+          exportBehaviorReportToTXT(mergedReport, userId);
+          break;
+        case "pdf":
+          await exportBehaviorReportToPDF(mergedReport, userId);
+          break;
+        default:
+          throw new Error("فرمت نامعتبر است");
+      }
+
+      return true;
+    } catch (error: any) {
+      console.error("Download error:", error);
+      throw new Error(error.message || "خطا در دانلود فایل");
+    }
   },
 };

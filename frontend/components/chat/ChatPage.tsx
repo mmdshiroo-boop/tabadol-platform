@@ -4,10 +4,11 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { ChatList } from "./ChatList";
 import { ChatWindow } from "./ChatWindow";
 import { useMessages } from "@/hooks/useMessages";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { chatApi } from "@/services/api/chat.api"; // ✅ ایمپورت برای ساخت گفتگو
 
 export function ChatPage() {
   const {
@@ -30,22 +31,59 @@ export function ChatPage() {
     string | null
   >(null);
   const [isClient, setIsClient] = useState(false);
+  const [creatingConversation, setCreatingConversation] = useState(false);
   const prevConversationRef = useRef<string | null>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
+  // ─── تشخیص ورود اولیه بر اساس پارامترهای URL ───
   useEffect(() => {
     setIsClient(true);
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get("conversationId") || null;
-    setActiveConversationId(id);
-  }, []);
 
+    // ۱. دریافت conversationId از URL
+    const conversationIdParam = searchParams.get("conversationId");
+    // ۲. دریافت userId از URL (برای ساخت گفتگوی جدید)
+    const userIdParam = searchParams.get("userId");
+
+    if (conversationIdParam) {
+      // اگر conversationId موجود بود، آن را فعال کن
+      setActiveConversationId(conversationIdParam);
+    } else if (userIdParam) {
+      // اگر فقط userId داشتیم، یک گفتگو بساز
+      const startChatWithUser = async () => {
+        setCreatingConversation(true);
+        try {
+          const conversation = await chatApi.createConversation(userIdParam);
+          if (conversation?._id) {
+            setActiveConversationId(conversation._id);
+            // URL را به conversationId تغییر می‌دهیم تا رفرش مشکلی ایجاد نکند
+            router.replace(`/chat?conversationId=${conversation._id}`);
+          } else {
+            console.error("گفتگو ساخته نشد");
+          }
+        } catch (error: any) {
+          console.error("Error creating conversation:", error);
+          // در صورت خطا، کاربر را به حالت بدون گفتگو برمی‌گردانیم
+          setActiveConversationId(null);
+        } finally {
+          setCreatingConversation(false);
+        }
+      };
+      startChatWithUser();
+    } else {
+      // هیچ پارامتری نداریم
+      setActiveConversationId(null);
+    }
+  }, [searchParams, router]);
+
+  // ─── بارگذاری پیام‌های گفتگوی فعال ───
   useEffect(() => {
     if (activeConversationId) {
       fetchMessages(activeConversationId);
     }
   }, [activeConversationId, fetchMessages]);
 
+  // ─── مدیریت join/leave در Socket ───
   useEffect(() => {
     if (!socket || !isClient) return;
     if (prevConversationRef.current) {
@@ -62,7 +100,7 @@ export function ChatPage() {
     };
   }, [activeConversationId, socket, isClient]);
 
-  // مدیریت نمایش هوشمند منوی ناوبری پایین
+  // ─── مدیریت نمایش bottom-nav در موبایل ───
   useEffect(() => {
     const bottomNav = document.getElementById("mobile-bottom-nav");
     if (bottomNav) {
@@ -101,10 +139,20 @@ export function ChatPage() {
     }
   };
 
+  if (creatingConversation) {
+    return (
+      <div className="flex items-center justify-center h-[70vh] w-full" dir="rtl">
+        <div className="text-center text-muted-foreground">
+          <div className="animate-spin rounded-full h-10 w-10 border-4 border-t-primary border-primary/20 mx-auto mb-4" />
+          <p className="text-sm font-bold">در حال ایجاد گفتگو...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
-        // تنظیم خطوط جداکننده خطی در بالا و پایین (border-t و border-b) و بهینه‌سازی ارتفاع تا مرز bottom-nav
         "flex w-full border-t border-b border-border/60 overflow-hidden bg-background md:rounded-2xl shadow-sm transition-all duration-200",
         activeConversationId
           ? "h-[100dvh] md:h-[calc(100vh-80px)]"

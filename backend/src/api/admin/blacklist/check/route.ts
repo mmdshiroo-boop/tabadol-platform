@@ -1,10 +1,7 @@
+// backend/src/api/admin/blacklist/check/route.ts
 import { Request, Response, NextFunction } from "express";
-import BlacklistKeyword, {
-  IBlacklistKeyword,
-  BlacklistCategory,
-  BlacklistSeverity,
-  SEVERITY_WEIGHTS,
-} from "../../../../models/blacklist.model";
+import { BlacklistCategory, BlacklistSeverity, SEVERITY_WEIGHTS } from "../../../../models/blacklist.model";
+import { BlacklistKeyword } from "../../../../models/BlacklistKeyword.model";
 import { Ad } from "../../../../models";
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -17,7 +14,7 @@ import { Ad } from "../../../../models";
 // ──────────────────────────────────────────────
 
 interface DefaultBlacklistItem {
-  keyword: string;
+  word: string;
   category: BlacklistCategory;
   severity: BlacklistSeverity;
   note: string;
@@ -27,85 +24,85 @@ interface DefaultBlacklistItem {
 const DEFAULT_BLACKLIST: DefaultBlacklistItem[] = [
   // ── عبارات کلاهبرداری ──
   {
-    keyword: "فوری",
+    word: "فوری",
     category: "scam",
     severity: "medium",
     note: "ایجاد فشار احساسی برای تصمیم سریع",
   },
   {
-    keyword: "فقط امروز",
+    word: "فقط امروز",
     category: "scam",
     severity: "high",
     note: "تاکتیک فشار زمانی برای کلاهبرداری",
   },
   {
-    keyword: "تخفیف ویژه",
+    word: "تخفیف ویژه",
     category: "scam",
     severity: "medium",
     note: "عبارت تبلیغاتی فریبنده",
   },
   {
-    keyword: "فرصت استثنایی",
+    word: "فرصت استثنایی",
     category: "scam",
     severity: "high",
     note: "جلب توجه با ایجاد حس فوریت کاذب",
   },
   {
-    keyword: "فرصت طلایی",
+    word: "فرصت طلایی",
     category: "scam",
     severity: "medium",
     note: "عبارت تبلیغاتی اغراق‌آمیز",
   },
   {
-    keyword: "قیمت رویایی",
+    word: "قیمت رویایی",
     category: "scam",
     severity: "medium",
     note: "قیمت غیرمنطقی و فریبنده",
   },
   {
-    keyword: "بدون پیش‌پرداخت",
+    word: "بدون پیش‌پرداخت",
     category: "scam",
     severity: "high",
     note: "شاید کلاهبرداری باشد",
   },
   {
-    keyword: "گارانتی بازگشت وجه",
+    word: "گارانتی بازگشت وجه",
     category: "scam",
     severity: "medium",
     note: "ادعای بدون پشتوانه قانونی",
   },
   {
-    keyword: "سود تضمینی",
+    word: "سود تضمینی",
     category: "scam",
     severity: "high",
     note: "وعده سود غیرمنطقی",
   },
   {
-    keyword: "صد در صد تضمینی",
+    word: "صد در صد تضمینی",
     category: "scam",
     severity: "high",
     note: "ادعای قطعی مشکوک",
   },
   {
-    keyword: "خرید بی‌واسطه",
+    word: "خرید بی‌واسطه",
     category: "scam",
     severity: "low",
     note: "شاید معتبر باشد ولی نیاز به بررسی",
   },
   {
-    keyword: "مستقیم از مالک",
+    word: "مستقیم از مالک",
     category: "scam",
     severity: "low",
     note: "نیاز به احراز هویت مالک",
   },
   {
-    keyword: "آخرین فرصت",
+    word: "آخرین فرصت",
     category: "scam",
     severity: "medium",
     note: "ایجاد فشار زمانی",
   },
   {
-    keyword: "قیمت شکسته",
+    word: "قیمت شکسته",
     category: "scam",
     severity: "medium",
     note: "عبارت اغراق‌آمیز",
@@ -113,95 +110,95 @@ const DEFAULT_BLACKLIST: DefaultBlacklistItem[] = [
 
   // ── الگوهای هرزنامه ──
   {
-    keyword: "تماس بگیرید",
+    word: "تماس بگیرید",
     category: "spam",
     severity: "low",
     note: "درخواست تماس بدون اطلاعات کافی",
   },
   {
-    keyword: "واتساپ",
+    word: "واتساپ",
     category: "spam",
     severity: "low",
     note: "انتقال کاربر به پیام‌رسان خارجی",
   },
   {
-    keyword: "تلگرام من",
+    word: "تلگرام من",
     category: "spam",
     severity: "medium",
     note: "هدایت به کانال تلگرام",
   },
   {
-    keyword: "عضویت در کانال",
+    word: "عضویت در کانال",
     category: "spam",
     severity: "medium",
     note: "تبلیغ کانال",
   },
   {
-    keyword: "ایمیل ما",
+    word: "ایمیل ما",
     category: "spam",
     severity: "low",
     note: "هدایت به ایمیل",
   },
   {
-    keyword: "اینستاگرام ما",
+    word: "اینستاگرام ما",
     category: "spam",
     severity: "low",
     note: "تبلیغ پیج",
   },
   {
-    keyword: "لینک مستقیم",
+    word: "لینک مستقیم",
     category: "spam",
     severity: "medium",
     note: "لینک خارجی مشکوک",
   },
   {
-    keyword: "روی لینک کلیک کنید",
+    word: "روی لینک کلیک کنید",
     category: "spam",
     severity: "medium",
     note: "فیشینگ احتمالی",
   },
   {
-    keyword: "برای اطلاعات بیشتر تماس بگیر",
+    word: "برای اطلاعات بیشتر تماس بگیر",
     category: "spam",
     severity: "low",
     note: "عدم ارائه اطلاعات کافی در آگهی",
   },
   {
-    keyword: "http",
+    word: "http",
     category: "spam",
     severity: "medium",
     note: "لینک خارجی در متن آگهی",
   },
   {
-    keyword: "https",
+    word: "https",
     category: "spam",
     severity: "medium",
     note: "لینک خارجی در متن آگهی",
   },
-  { keyword: ".ir", category: "spam", severity: "low", note: "دامنه وب‌سایت" },
-  { keyword: ".com", category: "spam", severity: "low", note: "دامنه وب‌سایت" },
+  { word: ".ir", category: "spam", severity: "low", note: "دامنه وب‌سایت" },
+  { word: ".com", category: "spam", severity: "low", note: "دامنه وب‌سایت" },
 
   // ── کلمات اخلاقی/سیاسی پایه ──
   {
-    keyword: "رشوه",
+    word: "رشوه",
     category: "ethical",
     severity: "critical",
     note: "اشاره به فساد مالی",
   },
   {
-    keyword: "زورگیری",
+    word: "زورگیری",
     category: "ethical",
     severity: "critical",
     note: "تهدید و ارعاب",
   },
   {
-    keyword: "تقلب",
+    word: "تقلب",
     category: "ethical",
     severity: "high",
     note: "اشاره به تقلب",
   },
   {
-    keyword: "کلاهبرداری",
+    word: "کلاهبرداری",
     category: "ethical",
     severity: "high",
     note: "اشاره مستقیم به کلاهبرداری",
@@ -209,25 +206,25 @@ const DEFAULT_BLACKLIST: DefaultBlacklistItem[] = [
 
   // ── کلمات سیاسی ──
   {
-    keyword: "تحریم",
+    word: "تحریم",
     category: "political",
     severity: "high",
     note: "موضوع حساس سیاسی",
   },
   {
-    keyword: "اعتراض",
+    word: "اعتراض",
     category: "political",
     severity: "high",
     note: "موضوع حساس سیاسی",
   },
   {
-    keyword: "تظاهرات",
+    word: "تظاهرات",
     category: "political",
     severity: "high",
     note: "موضوع حساس سیاسی",
   },
   {
-    keyword: "سازمان مخفی",
+    word: "سازمان مخفی",
     category: "political",
     severity: "critical",
     note: "محتوای مشکوک",
@@ -238,90 +235,59 @@ const DEFAULT_BLACKLIST: DefaultBlacklistItem[] = [
 // بخش ۲: توابع کمکی (Helper Functions)
 // ──────────────────────────────────────────────
 
-/** نتیجه تطبیق یک کلمه سیاه با متن */
 export interface KeywordMatch {
-  /** کلمه سیاه پیدا شده */
-  keyword: string;
-  /** دسته‌بندی کلمه */
+  word: string;
   category: BlacklistCategory;
-  /** سطح شدت */
   severity: BlacklistSeverity;
-  /** بخشی از متن که مطابقت داشته */
   matchedText: string;
-  /** موقعیت شروع تطبیق در متن (کاراکتر) */
   position: number;
 }
 
-/** نتیجه بررسی متن */
 export interface TextCheckResult {
-  /** آیا متنی پرچم‌گذاری شده؟ */
   flagged: boolean;
-  /** لیست تطبیق‌ها */
   matches: KeywordMatch[];
-  /** نمره ریسک ۰ تا ۱۰۰ */
   score: number;
 }
 
-/**
- * نرمال‌سازی متن فارسی/عربی
- * تبدیل کاراکترهای عربی به فارسی، حذف فاصله‌های اضافی و اعراب
- *
- * @param text - متن ورودی
- * @returns متن نرمال‌سازی شده
- */
+// تایپ محلی برای ساختار مورد نیاز کلمات سیاه
+export interface BlacklistKeywordLike {
+  word: string;
+  isActive: boolean;
+  category: BlacklistCategory;
+  severity: BlacklistSeverity;
+}
+
 export function normalizePersianText(text: string): string {
   if (!text) return "";
 
   return (
     text
-      // حذف اعراب عربی (فتحه، کسره، ضمه، تنوین‌ها، سکون، شدّه)
       .replace(/[\u064B-\u065F\u0670]/g, "")
-      // حذف تشدید و تنوین
       .replace(/\u0651/g, "")
       .replace(/\u0652/g, "")
-      // تبدیل کاف عربی (ك) به کاف فارسی (ک)
       .replace(/ك/g, "ک")
-      // تبدیل یای عربی (ي) به یای فارسی (ی)
       .replace(/ي/g, "ی")
-      // تبدیل تای مرBNه‌شده (ة) به ه
       .replace(/ة/g, "ه")
-      // تبدیل ۰-۹ عربی/هندی به فارسی
       .replace(/[٠-٩]/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[parseInt(d, 16) - 0x0660] || d)
-      // حذف فاصله‌های متعدد و تبدیل به فاصله واحد
       .replace(/\s+/g, " ")
-      // حذف نیم‌فاصله‌های اضافی
       .replace(/\u200C{2,}/g, "\u200C")
-      // حذف فاصله‌های اطراف متن
       .trim()
-      // حذف خط تیره‌های اضافی
       .replace(/[-–—]{2,}/g, " - ")
-      // نرمال‌سازی نقطه‌گذاری
       .replace(/[،؛؟]/g, " ")
   );
 }
 
-/**
- * محاسبه فاصله لون‌اشتاین (Levenshtein distance) بین دو رشته
- * برای تطبیق فازی (fuzzy matching)
- *
- * @param a - رشته اول
- * @param b - رشته دوم
- * @returns تعداد تغییرات لازم برای تبدیل a به b
- */
 function levenshteinDistance(a: string, b: string): number {
   const m = a.length;
   const n = b.length;
 
-  // ماتریس DP
   const dp: number[][] = Array.from({ length: m + 1 }, () =>
     Array(n + 1).fill(0),
   );
 
-  // مقداردهی اولیه
   for (let i = 0; i <= m; i++) dp[i][0] = i;
   for (let j = 0; j <= n; j++) dp[0][j] = j;
 
-  // پر کردن ماتریس
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
       if (a[i - 1] === b[j - 1]) {
@@ -330,9 +296,9 @@ function levenshteinDistance(a: string, b: string): number {
         dp[i][j] =
           1 +
           Math.min(
-            dp[i - 1][j], // حذف
-            dp[i][j - 1], // درج
-            dp[i - 1][j - 1], // جایگزینی
+            dp[i - 1][j],
+            dp[i][j - 1],
+            dp[i - 1][j - 1],
           );
       }
     }
@@ -341,27 +307,15 @@ function levenshteinDistance(a: string, b: string): number {
   return dp[m][n];
 }
 
-/**
- * بررسی تطبیق فازی بین دو رشته
- * درصورت نزدیکی کافی، تطبیق برقرار می‌شود
- *
- * @param source - متن منبع (نرمال‌سازی شده)
- * @param target - کلمه هدف (نرمال‌سازی شده)
- * @param threshold - آستانه تطبیق (۰ تا ۱، پیش‌فرض ۰.۸)
- * @returns آیا تطبیق وجود دارد؟
- */
 function fuzzyMatch(
   source: string,
   target: string,
   threshold: number = 0.8,
 ): boolean {
-  // تطبیق دقیق
   if (source.includes(target)) return true;
 
-  // تطبیق فازی: اگر طول کلمه کمتر از ۳ باشد، فقط تطبیق دقیق
   if (target.length < 3) return false;
 
-  // محاسبه شباهت بر اساس فاصله لون‌اشتاین
   const distance = levenshteinDistance(source, target);
   const maxLen = Math.max(source.length, target.length);
   const similarity = 1 - distance / maxLen;
@@ -369,13 +323,6 @@ function fuzzyMatch(
   return similarity >= threshold;
 }
 
-/**
- * جستجوی همه موقعیت‌های یک زیررشته در متن
- *
- * @param text - متن اصلی
- * @param substring - زیررشته مورد جستجو
- * @returns آرایه‌ای از موقعیت‌های شروع
- */
 function findAllOccurrences(text: string, substring: string): number[] {
   const positions: number[] = [];
   let pos = text.indexOf(substring);
@@ -388,17 +335,9 @@ function findAllOccurrences(text: string, substring: string): number[] {
   return positions;
 }
 
-/**
- * بررسی متن در برابر لیست سیاه
- * شامل تطبیق دقیق و فازی با نرمال‌سازی فارسی
- *
- * @param text - متن آگهی (عنوان + توضیحات)
- * @param keywords - آرایه کلمات سیاه
- * @returns نتیجه بررسی شامل تطبیق‌ها و نمره ریسک
- */
 export function checkTextAgainstBlacklist(
   text: string,
-  keywords: IBlacklistKeyword[],
+  keywords: BlacklistKeywordLike[],
 ): TextCheckResult {
   if (!text || !keywords || keywords.length === 0) {
     return { flagged: false, matches: [], score: 0 };
@@ -407,20 +346,16 @@ export function checkTextAgainstBlacklist(
   const normalizedText = normalizePersianText(text);
   const normalizedTextLower = normalizedText.toLowerCase();
   const matches: KeywordMatch[] = [];
-  const seenKeywords = new Set<string>(); // جلوگیری از تطبیق تکراری
+  const seenKeywords = new Set<string>();
 
   for (const kw of keywords) {
-    // فقط کلمات فعال
     if (!kw.isActive) continue;
 
-    // نرمال‌سازی کلمه کلیدی
-    const normalizedKeyword = normalizePersianText(kw.keyword);
+    const normalizedKeyword = normalizePersianText(kw.word);
     const normalizedKeywordLower = normalizedKeyword.toLowerCase();
 
-    // جلوگیری از تکرار
     if (seenKeywords.has(normalizedKeywordLower)) continue;
 
-    // ── ۱. تطبیق دقیق در متن نرمال‌سازی شده ──
     const exactPositions = findAllOccurrences(
       normalizedTextLower,
       normalizedKeywordLower,
@@ -428,9 +363,7 @@ export function checkTextAgainstBlacklist(
 
     if (exactPositions.length > 0) {
       seenKeywords.add(normalizedKeywordLower);
-      // فقط اولین تطبیق را ثبت می‌کنیم
       const pos = exactPositions[0];
-      // استخراج متن اطراف تطبیق (حداکثر ۵۰ کاراکتر)
       const contextStart = Math.max(0, pos - 10);
       const contextEnd = Math.min(
         normalizedText.length,
@@ -439,7 +372,7 @@ export function checkTextAgainstBlacklist(
       const matchedText = normalizedText.slice(contextStart, contextEnd);
 
       matches.push({
-        keyword: kw.keyword,
+        word: kw.word,
         category: kw.category,
         severity: kw.severity,
         matchedText,
@@ -449,18 +382,14 @@ export function checkTextAgainstBlacklist(
       continue;
     }
 
-    // ── ۲. تطبیق فازی برای کلمات بلند (بیشتر از ۳ کاراکتر) ──
     if (normalizedKeyword.length >= 3) {
-      // تقسیم متن به کلمات و بررسی هر کلمه
       const words = normalizedTextLower.split(/\s+/);
 
       for (let i = 0; i < words.length; i++) {
-        // تطبیق فازی تک‌کلمه‌ای
         if (fuzzyMatch(words[i], normalizedKeywordLower, 0.85)) {
           if (seenKeywords.has(normalizedKeywordLower)) break;
           seenKeywords.add(normalizedKeywordLower);
 
-          // یافتن موقعیت در متن اصلی
           const pos = normalizedTextLower.indexOf(words[i]);
           const contextStart = Math.max(0, pos - 10);
           const contextEnd = Math.min(
@@ -470,7 +399,7 @@ export function checkTextAgainstBlacklist(
           const matchedText = normalizedText.slice(contextStart, contextEnd);
 
           matches.push({
-            keyword: kw.keyword,
+            word: kw.word,
             category: kw.category,
             severity: kw.severity,
             matchedText,
@@ -479,7 +408,6 @@ export function checkTextAgainstBlacklist(
           break;
         }
 
-        // بررسی عبارات دو کلمه‌ای
         if (i < words.length - 1) {
           const twoWords = `${words[i]} ${words[i + 1]}`;
           if (fuzzyMatch(twoWords, normalizedKeywordLower, 0.8)) {
@@ -495,7 +423,7 @@ export function checkTextAgainstBlacklist(
             const matchedText = normalizedText.slice(contextStart, contextEnd);
 
             matches.push({
-              keyword: kw.keyword,
+              word: kw.word,
               category: kw.category,
               severity: kw.severity,
               matchedText,
@@ -505,7 +433,6 @@ export function checkTextAgainstBlacklist(
           }
         }
 
-        // بررسی عبارات سه کلمه‌ای (برای عبارات طولانی‌تر)
         if (i < words.length - 2 && normalizedKeyword.includes(" ")) {
           const threeWords = `${words[i]} ${words[i + 1]} ${words[i + 2]}`;
           if (fuzzyMatch(threeWords, normalizedKeywordLower, 0.75)) {
@@ -521,7 +448,7 @@ export function checkTextAgainstBlacklist(
             const matchedText = normalizedText.slice(contextStart, contextEnd);
 
             matches.push({
-              keyword: kw.keyword,
+              word: kw.word,
               category: kw.category,
               severity: kw.severity,
               matchedText,
@@ -534,7 +461,6 @@ export function checkTextAgainstBlacklist(
     }
   }
 
-  // مرتب‌سازی بر اساس شدت (بحرانی اول)
   const severityOrder: Record<BlacklistSeverity, number> = {
     critical: 0,
     high: 1,
@@ -550,18 +476,6 @@ export function checkTextAgainstBlacklist(
   };
 }
 
-/**
- * محاسبه نمره ریسک بر اساس تطبیق‌های پیدا شده
- * نمره بین ۰ تا ۱۰۰
- *
- * الگوریتم:
- * - هر تطبیق وزنی بر اساس شدت دارد
- * - امتیاز نهایی = min(Σ وزن‌ها, 100)
- * - اگر تطبیق بحرانی وجود داشته باشد، حداقل ۸۰ امتیاز
- *
- * @param matches - آرایه تطبیق‌ها
- * @returns نمره ریسک (۰ تا ۱۰۰)
- */
 export function calculateFlagScore(matches: KeywordMatch[]): number {
   if (!matches || matches.length === 0) return 0;
 
@@ -570,35 +484,18 @@ export function calculateFlagScore(matches: KeywordMatch[]): number {
 
   for (const match of matches) {
     const weight = SEVERITY_WEIGHTS[match.severity];
-
-    // اولین تطبیق از هر نوع وزن کامل را می‌گیرد
-    // تطبیق‌های تکراری وزن کمتری دارند
     totalScore += weight;
-
-    if (match.severity === "critical") {
-      hasCritical = true;
-    }
+    if (match.severity === "critical") hasCritical = true;
   }
 
-  // اگر حداقل یک تطبیق بحرانی وجود دارد، حداقل نمره ۸۰
-  if (hasCritical && totalScore < 80) {
-    totalScore = 80;
-  }
+  if (hasCritical && totalScore < 80) totalScore = 80;
 
-  // اعمال ضریب تعداد: هرچه تطبیق‌های بیشتری باشد، نمره بالاتر
   const multiplier = 1 + (matches.length - 1) * 0.1;
   totalScore = totalScore * multiplier;
 
-  // محدود کردن به ۱۰۰
   return Math.min(Math.round(totalScore), 100);
 }
 
-/**
- * اعمال اولیه لیست سیاه پیش‌فرض
- * در صورت خالی بودن دیتابیس، کلمات پیش‌فرض اضافه می‌شوند
- *
- * @param adminUserId - شناسه کاربر ادمین برای فیلد addedBy
- */
 export async function seedDefaultBlacklist(adminUserId: string): Promise<void> {
   const count = await BlacklistKeyword.countDocuments();
 
@@ -606,7 +503,7 @@ export async function seedDefaultBlacklist(adminUserId: string): Promise<void> {
     console.log("📂 در حال بارگذاری لیست سیاه پیش‌فرض...");
 
     const docs = DEFAULT_BLACKLIST.map((item) => ({
-      keyword: item.keyword,
+      word: item.word,
       category: item.category,
       severity: item.severity,
       note: item.note,
@@ -620,14 +517,6 @@ export async function seedDefaultBlacklist(adminUserId: string): Promise<void> {
   }
 }
 
-// ──────────────────────────────────────────────
-// بخش ۳: Middleware — بررسی دسترسی ادمین
-// ──────────────────────────────────────────────
-
-/**
- * میان‌افزار بررسی نقش ادمین
- * فقط کاربران با نقش admin یا super_admin اجازه دسترسی دارند
- */
 export function requireAdmin(
   req: Request,
   res: Response,
@@ -654,36 +543,18 @@ export function requireAdmin(
   next();
 }
 
-// ──────────────────────────────────────────────
-// بخش ۴: کنترلرهای API
-// ──────────────────────────────────────────────
-
-/**
- * POST /api/admin/blacklist
- * افزودن کلمه/عبارت جدید به لیست سیاه
- */
 export async function addKeyword(req: Request, res: Response): Promise<void> {
   try {
-    const { keyword, category, severity, note } = req.body;
+    const { word, category, severity, note } = req.body;
     const userId = (req as any).user?._id;
 
-    if (
-      !keyword ||
-      typeof keyword !== "string" ||
-      keyword.trim().length === 0
-    ) {
-      res
-        .status(400)
-        .json({ success: false, message: "کلمه کلیدی الزامی است" });
+    if (!word || typeof word !== "string" || word.trim().length === 0) {
+      res.status(400).json({ success: false, message: "کلمه کلیدی الزامی است" });
       return;
     }
 
-    if (
-      !["ethical", "political", "scam", "spam", "custom"].includes(category)
-    ) {
-      res
-        .status(400)
-        .json({ success: false, message: "دسته‌بندی نامعتبر است" });
+    if (!["ethical", "political", "scam", "spam", "custom"].includes(category)) {
+      res.status(400).json({ success: false, message: "دسته‌بندی نامعتبر است" });
       return;
     }
 
@@ -692,9 +563,9 @@ export async function addKeyword(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const normalizedKeyword = normalizePersianText(keyword.trim());
+    const normalizedKeyword = normalizePersianText(word.trim());
     const existing = await BlacklistKeyword.findOne({
-      keyword: normalizedKeyword,
+      word: normalizedKeyword,
     });
 
     if (existing) {
@@ -706,13 +577,14 @@ export async function addKeyword(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    // اصلاح: استفاده از any برای سازگاری با Mongoose
     const newKeyword = await BlacklistKeyword.create({
-      keyword: normalizedKeyword,
+      word: normalizedKeyword,
       category,
       severity,
       note: note?.trim() || "",
       addedBy: userId,
-    });
+    } as any);
 
     res.status(201).json({
       success: true,
@@ -728,23 +600,16 @@ export async function addKeyword(req: Request, res: Response): Promise<void> {
       return;
     }
     console.error("خطا در افزودن کلمه سیاه:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "خطای سرور در افزودن کلمه سیاه" });
+    res.status(500).json({ success: false, message: "خطای سرور در افزودن کلمه سیاه" });
   }
 }
 
-/**
- * GET /api/admin/blacklist
- * دریافت لیست کلمات سیاه با قابلیت فیلتر و صفحه‌بندی
- */
 export async function listKeywords(req: Request, res: Response): Promise<void> {
   try {
-    // ✅ تبدیل query ها به رشته
     const category = String(req.query.category || "");
     const severity = String(req.query.severity || "");
     const search = String(req.query.search || "");
-    const active = req.query.active; // می‌تواند undefined باشد
+    const active = req.query.active;
     const page = String(req.query.page || "1");
     const limit = String(req.query.limit || "20");
 
@@ -763,7 +628,7 @@ export async function listKeywords(req: Request, res: Response): Promise<void> {
       filter.isActive = active === "true";
     }
     if (search) {
-      filter.keyword = { $regex: normalizePersianText(search), $options: "i" };
+      filter.word = { $regex: normalizePersianText(search), $options: "i" };
     }
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
@@ -792,22 +657,16 @@ export async function listKeywords(req: Request, res: Response): Promise<void> {
     });
   } catch (error) {
     console.error("خطا در دریافت لیست سیاه:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "خطای سرور در دریافت لیست سیاه" });
+    res.status(500).json({ success: false, message: "خطای سرور در دریافت لیست سیاه" });
   }
 }
 
-/**
- * DELETE /api/admin/blacklist/:id
- * حذف کلمه از لیست سیاه
- */
 export async function deleteKeyword(
   req: Request,
   res: Response,
 ): Promise<void> {
   try {
-    const id = String(req.params.id); // ✅ تبدیل به رشته
+    const id = String(req.params.id);
 
     if (!id || id.length !== 24) {
       res.status(400).json({ success: false, message: "شناسه نامعتبر است" });
@@ -823,36 +682,31 @@ export async function deleteKeyword(
     res.json({
       success: true,
       message: "کلمه سیاه با موفقیت حذف شد",
-      data: { deletedId: id, keyword: deleted.keyword },
+      data: { deletedId: id, word: deleted.word },
     });
   } catch (error) {
     console.error("خطا در حذف کلمه سیاه:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "خطای سرور در حذف کلمه سیاه" });
+    res.status(500).json({ success: false, message: "خطای سرور در حذف کلمه سیاه" });
   }
 }
-/**
- * PUT /api/admin/blacklist/:id
- * بروزرسانی کلمه سیاه
- */
+
 export async function updateKeyword(
   req: Request,
   res: Response,
 ): Promise<void> {
   try {
-    const id = String(req.params.id); // ✅
+    const id = String(req.params.id);
 
     if (!id || id.length !== 24) {
       res.status(400).json({ success: false, message: "شناسه نامعتبر است" });
       return;
     }
 
-    const { keyword, category, severity, note, isActive } = req.body;
+    const { word, category, severity, note, isActive } = req.body;
     const updateData: Record<string, any> = {};
 
-    if (keyword !== undefined) {
-      updateData.keyword = normalizePersianText(keyword.trim());
+    if (word !== undefined) {
+      updateData.word = normalizePersianText(word.trim());
     }
     if (
       category &&
@@ -878,9 +732,9 @@ export async function updateKeyword(
       return;
     }
 
-    if (updateData.keyword) {
+    if (updateData.word) {
       const existing = await BlacklistKeyword.findOne({
-        keyword: updateData.keyword,
+        word: updateData.word,
         _id: { $ne: id },
       });
       if (existing) {
@@ -916,17 +770,10 @@ export async function updateKeyword(
       return;
     }
     console.error("خطا در بروزرسانی کلمه سیاه:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "خطای سرور در بروزرسانی کلمه سیاه" });
+    res.status(500).json({ success: false, message: "خطای سرور در بروزرسانی کلمه سیاه" });
   }
 }
 
-/**
- * POST /api/admin/blacklist/check
- * بررسی متن در برابر لیست سیاه
- * مورد استفاده: قبل از انتشار آگهی، بررسی خودکار
- */
 export async function checkText(req: Request, res: Response): Promise<void> {
   try {
     const { text } = req.body;
@@ -936,12 +783,13 @@ export async function checkText(req: Request, res: Response): Promise<void> {
     }
 
     const keywords = await BlacklistKeyword.find({ isActive: true }).lean();
-    const result = checkTextAgainstBlacklist(text, keywords);
+    // اصلاح: تبدیل نوع برای سازگاری با تابع
+    const result = checkTextAgainstBlacklist(text, keywords as any);
 
     if (result.flagged && result.matches.length > 0) {
-      const matchedKeywords = result.matches.map((m) => m.keyword);
+      const matchedWords = result.matches.map((m) => m.word);
       BlacklistKeyword.updateMany(
-        { keyword: { $in: matchedKeywords }, isActive: true },
+        { word: { $in: matchedWords }, isActive: true },
         { $inc: { matchCount: 1 } },
       ).catch(() => {});
     }
@@ -953,11 +801,6 @@ export async function checkText(req: Request, res: Response): Promise<void> {
   }
 }
 
-/**
- * GET /api/admin/blacklist/reports
- * گزارش آگهی‌های پرچم‌گذاری شده
- * آگهی‌هایی که با کلمات سیاه تطبیق داشته‌اند
- */
 export async function getFlaggedAdsReport(
   req: Request,
   res: Response,
@@ -982,7 +825,6 @@ export async function getFlaggedAdsReport(
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
     const skip = (pageNum - 1) * limitNum;
 
-    // ✅ استفاده از Ad استاتیک
     const [ads, total] = await Promise.all([
       Ad.find(filter)
         .sort({ createdAt: -1 })
@@ -1008,7 +850,12 @@ export async function getFlaggedAdsReport(
           (k) => k.severity === severity,
         );
 
-      const checkResult = checkTextAgainstBlacklist(fullText, filteredKeywords);
+      // اصلاح: حذف کست غیرضروری
+         const checkResult = checkTextAgainstBlacklist(
+        fullText,
+        filteredKeywords as any, // یا: as unknown as BlacklistKeywordLike[]
+      );
+
 
       return {
         _id: ad._id,
@@ -1049,22 +896,15 @@ export async function getFlaggedAdsReport(
     });
   } catch (error) {
     console.error("خطا در دریافت گزارش آگهی‌ها:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "خطای سرور در دریافت گزارش" });
+    res.status(500).json({ success: false, message: "خطای سرور در دریافت گزارش" });
   }
 }
 
-/**
- * POST /api/admin/blacklist/bulk-approve-low
- * تایید دسته‌ای آگهی‌های کم‌شدت
- */
 export async function bulkApproveLowSeverity(
   req: Request,
   res: Response,
 ): Promise<void> {
   try {
-    // ✅ کلید تکراری را با $and ترکیب کردیم
     const result = await Ad.updateMany(
       {
         moderationStatus: "flagged",
@@ -1090,11 +930,7 @@ export async function bulkApproveLowSeverity(
     res.status(500).json({ success: false, message: "خطای سرور" });
   }
 }
-/**
- * POST /api/admin/blacklist/bulk-reject-critical
- * رد دسته‌ای آگهی‌های بحرانی
- */
-// ── تابع bulkRejectCritical اصلاح‌شده ──
+
 export async function bulkRejectCritical(
   req: Request,
   res: Response,
@@ -1116,7 +952,6 @@ export async function bulkRejectCritical(
   }
 }
 
-// تابع setupBlacklistRoutes بدون تغییر باقی می‌ماند
 export function setupBlacklistRoutes(router: import("express").Router): void {
   router.use("/api/admin/blacklist", requireAdmin);
 

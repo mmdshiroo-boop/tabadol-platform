@@ -1,3 +1,4 @@
+// contact/page.tsx
 "use client";
 
 import { useSettings } from "@/app/context/SettingsContext";

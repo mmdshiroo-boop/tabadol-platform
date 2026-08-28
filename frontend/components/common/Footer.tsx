@@ -1,3 +1,4 @@
+// footer.tsx
 "use client";
 
 import React, { useState } from "react";
@@ -55,25 +56,34 @@ export function Footer() {
 
   return (
     <footer
-      className="relative border-t mt-auto overflow-hidden bg-card text-foreground"
+      className="relative border-t mt-auto overflow-hidden bg-background text-foreground"
       dir="rtl"
     >
+      {/* تزئینات پس‌زمینه بدون افکت شیشه‌ای */}
       <div className="absolute top-0 right-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-secondary/5 rounded-full blur-3xl pointer-events-none" />
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-10 relative z-10 max-w-[1200px]">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-8 pb-8 border-b border-border/60">
-          {/* ستون ۱: نام و توضیحات پلتفرم */}
+          {/* ستون ۱: لوگو و توضیحات */}
           <div className="md:col-span-4 space-y-4 text-right">
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary to-primary/80 flex items-center justify-center shadow-md shadow-primary/10">
-                <FiShield className="w-5 h-5 text-white" />
-              </div>
+            <div className="flex items-center gap-3">
+              {/* لوگوی جدید با دو نسخه روشن/تاریک */}
+              <img
+                src="/images/tabadol-logo-light.PNG"
+                alt="پلتفرم آگهی تبادل"
+                className="h-12 sm:h-14 w-auto object-contain dark:hidden drop-shadow-md"
+              />
+              <img
+                src="/images/tabadol-logo-dark.PNG"
+                alt="پلتفرم آگهی تبادل"
+                className="h-12 sm:h-14 w-auto object-contain hidden dark:block drop-shadow-md"
+              />
               <div className="flex flex-col space-y-0.5">
-                <span className="text-base font-black text-foreground tracking-tight block">
-                  {settings.siteName || "پلتفرم جامع آگهی"}
+                <span className="text-lg font-black text-foreground tracking-tight">
+                  {settings.siteName || "پلتفرم آگهی تبادل"}
                 </span>
-                <span className="text-[10px] text-muted-foreground block font-bold">
+                <span className="text-xs text-muted-foreground font-medium">
                   {settings.siteDescription || "خرید و فروش بی‌واسطه و امن"}
                 </span>
               </div>
@@ -84,20 +94,20 @@ export function Footer() {
             </p>
 
             {/* دکمه‌های عملیاتی */}
-            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+            <div className="flex flex-wrap gap-2 pt-2">
               <Link href="/support">
                 <Button
                   variant="outline"
-                  className="w-full sm:w-auto gap-2 text-xs font-bold rounded-xl border-border hover:border-primary/50 hover:bg-primary/5 text-foreground transition-all h-10 px-4"
+                  className="gap-2 text-xs font-bold rounded-xl border-border hover:border-primary/50 hover:bg-primary/5 text-foreground transition-all h-10 px-4"
                 >
                   <FiShield className="w-4 h-4 text-primary" />
-                  <span>مرکز پشتیبانی و ثبت تیکت</span>
+                  <span>مرکز پشتیبانی</span>
                 </Button>
               </Link>
               <Link href="/report">
                 <Button
                   variant="outline"
-                  className="w-full sm:w-auto gap-2 text-xs font-bold rounded-xl border-border hover:border-destructive/50 hover:bg-destructive/5 text-muted-foreground hover:text-destructive transition-all h-10 px-4"
+                  className="gap-2 text-xs font-bold rounded-xl border-border hover:border-destructive/50 hover:bg-destructive/5 text-muted-foreground hover:text-destructive transition-all h-10 px-4"
                 >
                   <FiFlag className="w-4 h-4" />
                   <span>گزارش تخلف</span>
@@ -106,7 +116,7 @@ export function Footer() {
               <Link href="/consulting">
                 <Button
                   variant="outline"
-                  className="w-full sm:w-auto gap-2 text-xs font-bold rounded-xl border-border hover:border-primary/50 hover:bg-primary/5 text-foreground transition-all h-10 px-4"
+                  className="gap-2 text-xs font-bold rounded-xl border-border hover:border-primary/50 hover:bg-primary/5 text-foreground transition-all h-10 px-4"
                 >
                   <span>مشاوره رایگان</span>
                 </Button>
@@ -236,6 +246,7 @@ export function Footer() {
         </div>
 
         <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          {/* تصاویر پایین (نماد اعتماد) */}
           <div className="flex gap-2 order-2 sm:order-1">
             <div className="w-12 h-12 bg-background border border-border/60 rounded-xl flex items-center justify-center shadow-xs cursor-pointer hover:border-border transition-colors">
               <div className="w-7 h-7 bg-muted/40 rounded-md" />
@@ -247,7 +258,7 @@ export function Footer() {
 
           <p className="text-[11px] text-muted-foreground/80 font-semibold order-1 sm:order-2 text-center sm:text-left">
             © {new Date().getFullYear()}{" "}
-            {settings.siteName || "پلتفرم جامع آگهی"}. تمامی حقوق مادی و معنوی
+            {settings.siteName || "پلتفرم آگهی تبادل"}. تمامی حقوق مادی و معنوی
             این وب‌سایت محفوظ است.
           </p>
         </div>

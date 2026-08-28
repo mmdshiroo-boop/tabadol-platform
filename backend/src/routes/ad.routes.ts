@@ -36,6 +36,7 @@ import {
   deactivateUrgent,
   extendUrgent,
   getSpecialAdsForAdmin,
+  shareAd,
 } from "../controllers/ad.controller";
 import { requireRole } from "../middleware/role.middleware";
 import { blacklistCheckMiddleware } from "../middleware/blacklistCheck.middleware";
@@ -197,4 +198,5 @@ router.patch(
   hasPermission("ads:write"),
   updateAdStatus,
 );
+router.post("/:id/share", protect, shareAd);
 export default router;

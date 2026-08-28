@@ -1,4 +1,4 @@
-// backend/src/controllers/marketAnalysis.controller.ts
+// backend/src/controllers/market.controller.ts
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import axios from "axios";

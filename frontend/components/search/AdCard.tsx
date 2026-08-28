@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Eye, MapPin, Calendar, Heart } from "lucide-react";
 import { favoritesApi } from "@/services/api/ads.api";
 import { toast } from "sonner";
+import VerifiedBadge from "@/components/common/VerifiedBadge"; // ✅ اضافه شد
 
 export interface AdCardProps {
   _id: string;
@@ -49,37 +50,27 @@ const getAdTypeDisplay = (adType?: string) => {
   }
 };
 
-// تابع هوشمند محاسبه زمان تقریبی به زبان فارسی
 const formatRelativeDate = (dateString: string): string => {
   if (!dateString) return "نامشخص";
 
   const now = new Date();
   const created = new Date(dateString);
-
-  // محاسبه اختلاف به میلی‌ثانیه
   const diffMs = now.getTime() - created.getTime();
 
-  // تبدیل به واحدهای مختلف زمانی
   const diffMinutes = Math.floor(diffMs / (1000 * 60));
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
   const diffWeeks = Math.floor(diffDays / 7);
   const diffMonths = Math.floor(diffDays / 30);
 
-  // شرط‌ها از زمان کمتر به بیشتر
   if (diffMinutes < 5) return "لحظاتی پیش";
-  if (diffMinutes < 60)
-    return `${diffMinutes.toLocaleString("fa-IR")} دقیقه پیش`;
-
+  if (diffMinutes < 60) return `${diffMinutes.toLocaleString("fa-IR")} دقیقه پیش`;
   if (diffHours < 24) return `${diffHours.toLocaleString("fa-IR")} ساعت پیش`;
-
   if (diffDays === 1) return "دیروز";
   if (diffDays === 2) return "پریروز";
   if (diffDays < 7) return `${diffDays.toLocaleString("fa-IR")} روز پیش`;
-
   if (diffWeeks === 1) return "۱ هفته پیش";
   if (diffWeeks < 4) return `${diffWeeks.toLocaleString("fa-IR")} هفته پیش`;
-
   if (diffMonths === 1) return "۱ ماه پیش";
   return `${diffMonths.toLocaleString("fa-IR")} ماه پیش`;
 };
@@ -132,8 +123,6 @@ export function AdCard({
 
     if (loading) return;
     setLoading(true);
-
-    type FavoriteResponse = { isFavorited: boolean };
 
     try {
       if (isLiked) {
@@ -194,8 +183,9 @@ export function AdCard({
             {isVerified && (
               <Badge
                 variant="secondary"
-                className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-600 dark:text-green-400"
+                className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-600 dark:text-green-400 flex items-center gap-1"
               >
+                <VerifiedBadge size="sm" className="text-green-600" />
                 تایید شده
               </Badge>
             )}
@@ -250,7 +240,6 @@ export function AdCard({
               )}
               <div className="flex items-center gap-1 font-bold text-[11px] text-muted-foreground/90">
                 <Calendar className="w-3 h-3" />
-                {/* اتصال زمان نسبی هوشمند شما در اینجا */}
                 <span>{formatRelativeDate(createdAt)}</span>
               </div>
             </div>

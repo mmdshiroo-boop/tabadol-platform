@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, Suspense } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { Float, Sparkles } from "@react-three/drei";
+import * as THREE from "three";
 import {
   Crown,
   ChevronLeft,
-  Sparkles,
+  Sparkles as SparklesIcon,
   TrendingUp,
   ShieldCheck,
   Zap,
@@ -51,6 +54,63 @@ const STATS = [
   { value: "24/7", label: "پشتیبانی" },
 ];
 
+/* ─── صحنه‌ی سه‌بعدی مدرن (فقط ذرات درخشان) ─── */
+function VipScene({
+  mousePosition,
+}: {
+  mousePosition: React.MutableRefObject<{ x: number; y: number }>;
+}) {
+  const groupRef = useRef<THREE.Group>(null);
+
+  useFrame(({ clock }) => {
+    if (!groupRef.current) return;
+    const t = clock.getElapsedTime();
+    const mx = mousePosition.current.x;
+    const my = mousePosition.current.y;
+
+    groupRef.current.rotation.y = THREE.MathUtils.lerp(
+      groupRef.current.rotation.y,
+      mx * 0.2,
+      0.05
+    );
+    groupRef.current.rotation.x = THREE.MathUtils.lerp(
+      groupRef.current.rotation.x,
+      -my * 0.15,
+      0.05
+    );
+  });
+
+  return (
+    <>
+      {/* نورپردازی گرم و لطیف */}
+      <ambientLight intensity={0.6} />
+      <directionalLight position={[2, 3, 2]} intensity={1.2} color="#ffedd5" />
+      <pointLight position={[-2, -1, -2]} intensity={0.8} color="#f97316" />
+      <pointLight position={[1, 2, -1]} intensity={0.6} color="#fbbf24" />
+
+      <group ref={groupRef}>
+        {/* ذرات درخشان */}
+        <Sparkles
+          count={50}
+          scale={[6, 4, 2]}
+          size={4}
+          speed={0.4}
+          color="#fbbf24"
+          opacity={0.8}
+        />
+        <Sparkles
+          count={25}
+          scale={[5, 3, 2]}
+          size={2}
+          speed={0.6}
+          color="#f97316"
+          opacity={0.6}
+        />
+      </group>
+    </>
+  );
+}
+
 export function VipPromoCard({
   href = "/pricing",
   source = "vip-promo",
@@ -62,6 +122,8 @@ export function VipPromoCard({
 }: VipPromoCardProps) {
   const { user } = useAuth();
   const [isHovered, setIsHovered] = useState(false);
+  const prefersReducedMotion = useReducedMotion();
+  const mousePosition = useRef({ x: 0, y: 0 });
 
   if (
     user &&
@@ -74,7 +136,15 @@ export function VipPromoCard({
   const defaultTitle = compact ? "ارتقا به VIP" : "بیشتر دیده شو، سریع‌تر بفروش";
   const defaultDescription = compact
     ? "دسترسی به امکانات ویژه و بازدید بیشتر"
-    : "با اشتراک VIP هویج، آگهی‌هات در صدر نتایج قرار می‌گیرن و به ابزارهای حرفه‌ای دسترسی پیدا می‌کنی.";
+    : "با اشتراک VIP تبادل، آگهی‌هات در صدر نتایج قرار می‌گیرن و به ابزارهای حرفه‌ای دسترسی پیدا می‌کنی.";
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    mousePosition.current = {
+      x: ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      y: ((e.clientY - rect.top) / rect.height) * 2 - 1,
+    };
+  };
 
   return (
     <motion.div
@@ -87,37 +157,59 @@ export function VipPromoCard({
         href={finalHref}
         className="block group"
         onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseLeave={() => {
+          setIsHovered(false);
+          mousePosition.current = { x: 0, y: 0 };
+        }}
       >
         <motion.div
-          whileHover={{ y: -4 }}
+          onMouseMove={handleMouseMove}
+          whileHover={{ y: -6, scale: 1.01 }}
           whileTap={{ scale: 0.98 }}
           transition={{ type: "spring", stiffness: 300, damping: 20 }}
           className={cn(
             "relative overflow-hidden rounded-3xl border",
-            "border-orange-200/60 dark:border-orange-700/30",
-            "bg-gradient-to-br from-orange-50 via-background to-amber-50/60",
-            "dark:from-orange-950/30 dark:via-background dark:to-amber-950/15",
-            "shadow-[0_8px_32px_rgba(249,115,22,0.08)]",
+            "border-orange-300/40 dark:border-white/10",
+            // حالت روشن: سفید به نارنجی ملایم
+            "bg-gradient-to-br from-white via-orange-50 to-orange-100",
+            // حالت تاریک: شیشه‌ای مشکی
+            "dark:bg-black/50 dark:backdrop-blur-xl",
+            "dark:bg-gradient-to-br dark:from-black/60 dark:via-orange-950/30 dark:to-black/60",
+            "shadow-[0_16px_60px_-15px_rgba(249,115,22,0.25)]",
+            "dark:shadow-[0_16px_60px_-15px_rgba(0,0,0,0.6)]",
             compact ? "p-4" : "p-5 md:p-6 lg:p-7",
           )}
         >
-          <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-[260px] h-[140px] bg-orange-400/8 dark:bg-orange-400/5 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-orange-400/60 to-transparent" />
-          <motion.div
-            className="absolute inset-0 bg-gradient-to-r from-transparent via-orange-200/10 to-transparent pointer-events-none"
-            initial={{ x: "-100%" }}
-            animate={isHovered ? { x: "100%" } : { x: "-100%" }}
-            transition={{ duration: 0.7, ease: "easeInOut" }}
-          />
-          <div className="absolute inset-0 opacity-[0.025] bg-[linear-gradient(to_right,#f97316_1px,transparent_1px),linear-gradient(to_bottom,#f97316_1px,transparent_1px)] bg-[size:18px_18px]" />
+          {/* صحنه‌ی سه‌بعدی (ذرات) */}
+          {!prefersReducedMotion && (
+            <div className="absolute inset-0 z-0 pointer-events-none">
+              <Suspense fallback={null}>
+                <Canvas
+                  camera={{ position: [0, 0, 4], fov: 45 }}
+                  dpr={[1, 1.5]}
+                  gl={{ alpha: true, antialias: true }}
+                  style={{ background: "transparent" }}
+                >
+                  <VipScene mousePosition={mousePosition} />
+                </Canvas>
+              </Suspense>
+            </div>
+          )}
 
+          {/* هاله‌های نورانی */}
+          <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-[300px] h-[180px] bg-orange-400/20 dark:bg-orange-500/10 rounded-full blur-3xl pointer-events-none z-0" />
+          <div className="absolute -bottom-24 -right-12 w-[220px] h-[220px] bg-amber-300/20 dark:bg-amber-500/10 rounded-full blur-3xl pointer-events-none z-0" />
+
+          {/* خط بالای کارت */}
+          <div className="absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent z-0" />
+
+          {/* محتوای اصلی */}
           <div className="relative z-10">
             {/* بالا */}
             <div className="flex items-start justify-between gap-4 lg:gap-8">
               <div className="min-w-0 flex-1">
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-100/90 dark:bg-orange-900/40 text-orange-600 dark:text-orange-300 text-[10px] font-extrabold border border-orange-200/60 dark:border-orange-700/40">
-                  <Sparkles className="w-3 h-3 text-orange-500 dark:text-orange-400" />
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-l from-orange-500 to-amber-500 text-white text-[10px] font-extrabold shadow-sm">
+                  <SparklesIcon className="w-3 h-3" />
                   محبوب‌ترین پلن کاربران
                 </div>
                 <h3 className={cn("mt-2.5 font-black text-foreground leading-snug", compact ? "text-sm" : "text-base md:text-lg lg:text-xl")}>
@@ -127,11 +219,10 @@ export function VipPromoCard({
                   {description || defaultDescription}
                 </p>
 
-                {/* آمار - فقط در حالت full و روی تبلت/دسکتاپ زیبا */}
                 {!compact && (
                   <div className="hidden sm:flex items-center gap-2.5 mt-5">
                     {STATS.map((stat, i) => (
-                      <div key={i} className="flex-1 sm:flex-none sm:min-w-[110px] lg:min-w-[130px] text-center py-2.5 rounded-2xl bg-orange-50/80 dark:bg-orange-950/30 border border-orange-100/60 dark:border-orange-800/25">
+                      <div key={i} className="flex-1 sm:flex-none sm:min-w-[110px] lg:min-w-[130px] text-center py-2.5 rounded-2xl bg-white/60 dark:bg-white/5 border border-orange-200/50 dark:border-white/10">
                         <p className="text-base lg:text-lg font-black text-orange-600 dark:text-orange-400 leading-none">{stat.value}</p>
                         <p className="text-[10px] lg:text-xs text-muted-foreground font-medium mt-1">{stat.label}</p>
                       </div>
@@ -140,9 +231,8 @@ export function VipPromoCard({
                 )}
               </div>
 
-              {/* Crown */}
               <div className="shrink-0 relative">
-                <div className={cn("relative rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 dark:from-orange-600 dark:to-orange-700 text-white shadow-lg flex items-center justify-center", compact ? "w-11 h-11" : "w-12 h-12 md:w-14 md:h-14 lg:w-16 lg:h-16")}>
+                <div className={cn("relative rounded-2xl bg-gradient-to-br from-yellow-400 to-orange-500 text-white shadow-xl shadow-orange-500/30 flex items-center justify-center", compact ? "w-11 h-11" : "w-12 h-12 md:w-14 md:h-14 lg:w-16 lg:h-16")}>
                   <Crown className={compact ? "w-5 h-5" : "w-6 h-6 lg:w-7 lg:h-7"} strokeWidth={2.5} />
                 </div>
               </div>
@@ -162,7 +252,7 @@ export function VipPromoCard({
                   {FEATURES_COMPACT.map((f, i) => {
                     const Icon = f.icon;
                     return (
-                      <div key={i} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-orange-100/80 dark:border-orange-800/25 bg-white/70 dark:bg-background/50">
+                      <div key={i} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-orange-200/60 dark:border-white/10 bg-white/70 dark:bg-white/5">
                         <Icon className="w-3 h-3 text-orange-500 dark:text-orange-400" />
                         <span className="text-[10px] font-bold text-foreground/85">{f.title}</span>
                       </div>
@@ -174,9 +264,9 @@ export function VipPromoCard({
                   {FEATURES_FULL.map((f, i) => {
                     const Icon = f.icon;
                     return (
-                      <div key={i} className="rounded-2xl border border-orange-100/60 dark:border-orange-800/20 bg-white/60 dark:bg-background/40 p-3 md:p-3.5">
+                      <div key={i} className="rounded-2xl border border-orange-200/40 dark:border-white/10 bg-white/50 dark:bg-white/5 p-3 md:p-3.5 backdrop-blur-sm">
                         <div className="flex items-start gap-2.5">
-                          <div className="w-8 h-8 md:w-9 md:h-9 rounded-xl bg-orange-100/80 dark:bg-orange-900/30 flex items-center justify-center shrink-0">
+                          <div className="w-8 h-8 md:w-9 md:h-9 rounded-xl bg-gradient-to-br from-orange-100 to-amber-100 dark:from-orange-900/40 dark:to-amber-900/30 flex items-center justify-center shrink-0">
                             <Icon className="w-4 h-4 md:w-4.5 md:h-4.5 text-orange-500 dark:text-orange-400" />
                           </div>
                           <div className="flex-1 min-w-0">
@@ -197,15 +287,15 @@ export function VipPromoCard({
                 {!compact && (
                   <div className="hidden sm:flex -space-x-1">
                     {[0, 1, 2].map((i) => (
-                      <Star key={i} className="w-3.5 h-3.5 text-orange-400 fill-orange-400" />
+                      <Star key={i} className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
                     ))}
                   </div>
                 )}
                 <p className="text-[10px] md:text-[11px] text-muted-foreground/60">
-                  {compact ? "برای کاربران فعال" : "مورد اعتماد کاربران حرفه‌ای هویج"}
+                  {compact ? "برای کاربران فعال" : "مورد اعتماد کاربران حرفه‌ای تبادل"}
                 </p>
               </div>
-              <div className={cn("inline-flex items-center gap-1.5 shrink-0 rounded-full bg-orange-500 hover:bg-orange-600 text-white font-extrabold shadow-md transition-colors", compact ? "px-3.5 py-2 text-[11px]" : "px-5 py-2.5 md:px-6 md:py-3 text-xs md:text-sm")}>
+              <div className={cn("inline-flex items-center gap-1.5 shrink-0 rounded-full bg-gradient-to-l from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold shadow-lg shadow-orange-500/20 transition-all hover:shadow-orange-500/30", compact ? "px-3.5 py-2 text-[11px]" : "px-5 py-2.5 md:px-6 md:py-3 text-xs md:text-sm")}>
                 <Rocket className="w-4 h-4" />
                 <span>{ctaText || (compact ? "ارتقا" : "مشاهده پلن‌های VIP")}</span>
                 <ChevronLeft className="w-3.5 h-3.5" />

@@ -1,8 +1,7 @@
+// components/cookie-ui/CookieAuditDetailModal.tsx
 "use client";
 
 import { CookieAuditLog } from "@/types";
-import { format, isValid } from "date-fns";
-import { faIR } from "date-fns/locale";
 import {
   Copy,
   X,
@@ -44,7 +43,28 @@ import { toast } from "sonner";
 import { getImageUrl } from "@/lib/getImageUrl";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
-// ─── پیکربندی وضعیت و نوع رویداد (اصلاح‌شده) ───
+// ─── فرمت تاریخ و زمان شمسی ───
+function formatPersianDateTime(dateInput?: string | Date): string {
+  if (!dateInput) return "—";
+  const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
+  if (isNaN(date.getTime())) return "—";
+
+  try {
+    return new Intl.DateTimeFormat("fa-IR", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).format(date);
+  } catch {
+    return "—";
+  }
+}
+
+// ─── پیکربندی وضعیت و نوع رویداد ───
 const STATUS_CONFIG: Record<
   string,
   {
@@ -379,17 +399,7 @@ export default function CookieAuditDetailModal({
   const TypeIcon = typeCfg.icon;
   const isSuspicious = statusKey === "suspicious" || typeKey === "suspicious";
 
-  let formattedDate = "—";
-  if (log.createdAt) {
-    const d = new Date(log.createdAt);
-    if (isValid(d)) {
-      try {
-        formattedDate = format(d, "yyyy/MM/dd - HH:mm:ss", { locale: faIR });
-      } catch {
-        formattedDate = "—";
-      }
-    }
-  }
+  const formattedDate = formatPersianDateTime(log.createdAt);
 
   const isUserObject = log.userId && typeof log.userId === "object";
   const user = isUserObject ? (log.userId as any) : null;
@@ -447,24 +457,24 @@ export default function CookieAuditDetailModal({
         dir="rtl"
       >
         {/* هدر شیشه‌ای */}
-        <div className="relative p-6 bg-gradient-to-l from-orange-500/20 via-orange-400/10 to-transparent backdrop-blur-xl border-b border-orange-200/30 dark:border-orange-900/30">
+        <div className="relative p-5 md:p-6 bg-gradient-to-l from-orange-500/20 via-orange-400/10 to-transparent backdrop-blur-xl border-b border-orange-200/30 dark:border-orange-900/30">
           <div className="absolute top-0 right-0 w-64 h-64 bg-orange-400/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none" />
-          <div className="relative flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div className="relative flex items-start sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-3 md:gap-4">
               <div
                 className={cn(
-                  "p-3 rounded-2xl border-2 shadow-sm",
+                  "p-2.5 md:p-3 rounded-2xl border-2 shadow-sm",
                   statusCfg.bg,
                   statusCfg.border,
                 )}
               >
-                <StatusIcon className={cn("w-6 h-6", statusCfg.color)} />
+                <StatusIcon className={cn("w-5 h-5 md:w-6 md:h-6", statusCfg.color)} />
               </div>
               <div>
-                <DialogTitle className="text-xl font-black text-foreground tracking-tight">
+                <DialogTitle className="text-lg md:text-xl font-black text-foreground tracking-tight">
                   جزئیات رویداد امنیتی
                 </DialogTitle>
-                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
+                <p className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-2">
                   <span className="font-mono bg-muted/50 px-2 py-0.5 rounded">
                     {log._id?.slice(-8) || "—"}
                   </span>
@@ -487,15 +497,15 @@ export default function CookieAuditDetailModal({
               variant="ghost"
               size="icon"
               onClick={onClose}
-              className="h-10 w-10 rounded-full bg-white/50 dark:bg-white/10 hover:bg-white/80 dark:hover:bg-white/20 transition-all"
+              className="h-9 w-9 md:h-10 md:w-10 rounded-full bg-white/50 dark:bg-white/10 hover:bg-white/80 dark:hover:bg-white/20 transition-all shrink-0"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4 md:w-5 md:h-5" />
             </Button>
           </div>
         </div>
 
         {/* بدنه با اسکرول */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-5 space-y-4 md:space-y-5 custom-scrollbar">
           {isSuspicious && (
             <motion.div
               initial={{ opacity: 0, scale: 0.98 }}
@@ -530,7 +540,7 @@ export default function CookieAuditDetailModal({
             />
           </div>
 
-          <div className="p-5 rounded-2xl bg-gradient-to-br from-white/80 to-white/50 dark:from-card/60 dark:to-card/40 border border-border/30 backdrop-blur-sm shadow-sm">
+          <div className="p-4 md:p-5 rounded-2xl bg-gradient-to-br from-white/80 to-white/50 dark:from-card/60 dark:to-card/40 border border-border/30 backdrop-blur-sm shadow-sm">
             <p className="text-[11px] text-muted-foreground font-medium mb-3 flex items-center gap-2">
               <User className="w-4 h-4 text-orange-500" />
               اطلاعات کاربر

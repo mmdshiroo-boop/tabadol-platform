@@ -5,15 +5,12 @@ import {
   hasPermission,
   requireRole,
 } from "../middleware/auth.middleware";
-import { User } from "../models/User.model";
-import { Ad } from "../models/Ad.model";
-import { Property } from "../models/Property.model";
-import { Report } from "../models/Report.model";
-import { AdminReport } from "../models/AdminReport.model";
 import {
   downloadExcelReport,
   downloadPdfReport,
 } from "../controllers/adminReport.controller";
+import { AdminReport } from "../models/AdminReport.model";
+import { Ad, Property, Report, User } from "../models";
 import Role from "../models/Role";
 
 const router = Router();

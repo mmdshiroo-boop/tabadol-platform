@@ -41,9 +41,9 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { messageApi } from "@/services/api/message.api";
-import { getImageUrl } from "@/lib/getImageUrl"; // ✅ helper مرکزی
-
-// ---- helpers (فقط formatFileSize و getFileTypeFromUrl باقی می‌مانند) ----
+import { getImageUrl } from "@/lib/getImageUrl";
+import Link from "next/link";
+import VerifiedBadge from "@/components/common/VerifiedBadge";
 
 const formatFileSize = (bytes: number) => {
   if (!bytes) return "";
@@ -346,24 +346,31 @@ export function ChatWindow({
           onClick={() => setShowProfileModal(true)}
           className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 transition-opacity text-right"
         >
-       <Avatar className="h-9 w-9 md:h-10 md:w-10 ring-2 ring-primary/10 shadow-sm">
-  <AvatarImage
-    src={
-      otherParticipant?.avatar
-        ? getImageUrl(otherParticipant.avatar)
-        : "/images/user.webp"
-    }
-    alt={otherParticipant?.firstName || "مخاطب"}
-    className="object-cover"
-  />
-  <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs md:text-sm" />
-</Avatar>
+          <Avatar className="h-9 w-9 md:h-10 md:w-10 ring-2 ring-primary/10 shadow-sm">
+            <AvatarImage
+              src={
+                otherParticipant?.avatar
+                  ? getImageUrl(otherParticipant.avatar)
+                  : "/images/user.webp"
+              }
+              alt={otherParticipant?.firstName || "مخاطب"}
+              className="object-cover"
+            />
+            <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs md:text-sm" />
+          </Avatar>
           <div className="min-w-0">
-            <p className="font-extrabold text-xs md:text-sm truncate text-foreground">
-              {otherParticipant
-                ? `${otherParticipant.firstName || ""} ${otherParticipant.lastName || ""}`
-                : "کاربر"}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <Link
+                href={`/profile/${otherParticipant?._id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="font-extrabold text-xs md:text-sm truncate text-foreground hover:underline underline-offset-4"
+              >
+                {otherParticipant
+                  ? `${otherParticipant.firstName || ""} ${otherParticipant.lastName || ""}`
+                  : "کاربر"}
+              </Link>
+              {otherParticipant?.isVerified && <VerifiedBadge size="sm" />}
+            </div>
             {typingUsers[conversationId!] ? (
               <p className="text-[11px] md:text-xs text-primary font-medium animate-pulse">
                 در حال تایپ...
@@ -383,7 +390,7 @@ export function ChatWindow({
           <div className="flex items-center gap-2 md:gap-3 max-w-full">
             {conversation.ad.images?.[0] && (
               <img
-                src={getImageUrl(conversation.ad.images[0])} // ✅
+                src={getImageUrl(conversation.ad.images[0])}
                 alt={conversation.ad.title}
                 className="w-9 h-9 md:w-10 md:h-10 rounded-lg object-cover shadow-sm shrink-0"
               />
@@ -505,10 +512,10 @@ export function ChatWindow({
                     String(currentUserId) === String(senderId);
 
                   const avatarSrc = isMine
-                    ? getImageUrl(user?.avatar) // ✅
+                    ? getImageUrl(user?.avatar)
                     : getImageUrl(
                         msg.sender?.avatar || otherParticipant?.avatar,
-                      ); // ✅
+                      );
 
                   return (
                     <motion.div
@@ -538,24 +545,23 @@ export function ChatWindow({
                           );
                         }}
                       >
-                       <Avatar className="h-7 w-7 shrink-0 mb-0.5 border border-border/40 shadow-sm">
-  <AvatarImage
-    src={avatarSrc}
-    alt={msg.sender?.firstName || "کاربر"}
-    className="object-cover"
-  />
-  <AvatarFallback className="text-[9px] bg-card font-bold" />
-</Avatar>
+                        <Avatar className="h-7 w-7 shrink-0 mb-0.5 border border-border/40 shadow-sm">
+                          <AvatarImage
+                            src={avatarSrc}
+                            alt={msg.sender?.firstName || "کاربر"}
+                            className="object-cover"
+                          />
+                          <AvatarFallback className="text-[9px] bg-card font-bold" />
+                        </Avatar>
                         <div className="flex flex-col">
                           <div
                             className={`relative px-3 py-2 md:px-4 md:py-2.5 rounded-2xl shadow-sm flex flex-col ${isMine ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-card border border-border/40 rounded-bl-sm text-foreground"}`}
                           >
-                            {/* رندر کردن فایل در صورت وجود در پیام */}
                             {msg.fileUrl && (
                               <div className="mb-2 max-w-full overflow-hidden rounded-xl">
                                 {getFileTypeFromUrl(msg.fileUrl) === "image" ? (
                                   <img
-                                    src={getImageUrl(msg.fileUrl)} // ✅
+                                    src={getImageUrl(msg.fileUrl)}
                                     alt="تصویر ارسالی"
                                     className="max-h-60 w-full object-cover cursor-pointer rounded-lg hover:opacity-95 transition-opacity"
                                     onClick={() => {
@@ -564,20 +570,20 @@ export function ChatWindow({
                                       ) {
                                         setPreviewImage(
                                           getImageUrl(msg.fileUrl),
-                                        ); // ✅
+                                        );
                                       }
                                     }}
                                   />
                                 ) : getFileTypeFromUrl(msg.fileUrl) ===
                                   "video" ? (
                                   <video
-                                    src={getImageUrl(msg.fileUrl)} // ✅
+                                    src={getImageUrl(msg.fileUrl)}
                                     controls
                                     className="max-h-60 w-full rounded-lg bg-black"
                                   />
                                 ) : (
                                   <a
-                                    href={getImageUrl(msg.fileUrl)} // ✅
+                                    href={getImageUrl(msg.fileUrl)}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className={`flex items-center gap-3 p-2.5 rounded-xl border transition-colors ${
@@ -610,14 +616,12 @@ export function ChatWindow({
                               </div>
                             )}
 
-                            {/* نمایش متن پیام یا کپشن فایل (در صورت وجود) */}
                             {msg.content && (
                               <p className="text-xs md:text-sm leading-relaxed whitespace-pre-wrap break-words text-right">
                                 {msg.content}
                               </p>
                             )}
 
-                            {/* بخش زمان و وضعیت بازدید */}
                             <div className="flex items-center justify-end gap-1 mt-1 self-end">
                               <span
                                 className={`text-[8px] md:text-[9px] ltr ${isMine ? "text-primary-foreground/70" : "text-muted-foreground"}`}
@@ -737,22 +741,27 @@ export function ChatWindow({
             پروفایل کاربر
           </DialogTitle>
           <div className="flex flex-col items-center space-y-4 pt-3">
-         <Avatar className="h-14 w-14 md:h-16 md:w-16 ring-2 ring-primary/10 shadow-lg">
-  <AvatarImage
-    src={
-      otherParticipant?.avatar
-        ? getImageUrl(otherParticipant.avatar)
-        : "/images/user.webp"
-    }
-    alt={otherParticipant?.firstName || "مخاطب"}
-    className="object-cover"
-  />
-  <AvatarFallback className="text-2xl md:text-3xl bg-primary/10 text-primary font-black" />
-</Avatar>
+            <Avatar className="h-14 w-14 md:h-16 md:w-16 ring-2 ring-primary/10 shadow-lg">
+              <AvatarImage
+                src={
+                  otherParticipant?.avatar
+                    ? getImageUrl(otherParticipant.avatar)
+                    : "/images/user.webp"
+                }
+                alt={otherParticipant?.firstName || "مخاطب"}
+                className="object-cover"
+              />
+              <AvatarFallback className="text-2xl md:text-3xl bg-primary/10 text-primary font-black" />
+            </Avatar>
             <div className="text-center space-y-1">
-              <h3 className="font-extrabold text-base md:text-xl">
-                {otherParticipant?.firstName} {otherParticipant?.lastName}
-              </h3>
+              <div className="flex items-center gap-1.5 justify-center">
+                <h3 className="font-extrabold text-base md:text-xl">
+                  {otherParticipant?.firstName} {otherParticipant?.lastName}
+                </h3>
+                {otherParticipant?.isVerified && (
+                  <VerifiedBadge size="md" />
+                )}
+              </div>
               {otherParticipant?.phone && (
                 <p
                   className="text-xs text-muted-foreground font-mono bg-muted/50 py-0.5 px-2.5 rounded-full inline-block"

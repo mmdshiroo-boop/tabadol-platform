@@ -1,3 +1,4 @@
+// layout.tsx
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import "./globals.css";
@@ -10,8 +11,8 @@ import { Toaster } from "sonner";
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: "پلتفرم آگهی هویج",
-  description: "بزرگ‌ترین بازار کالا و خدمات",
+  title: "پلتفرم آگهی تبادل",
+  description: "بزرگ‌ترین پلتفرم آگهی املاک و مستغلات تبادل",
 };
 
 export default function RootLayout({
@@ -41,7 +42,7 @@ export default function RootLayout({
                 richColors={false}
                 closeButton
                 gap={8}
-                style={{ zIndex: 99999 }}  // ← این خط بسیار مهم است
+                style={{ zIndex: 99999 }}  
                 toastOptions={{
                   style: {
                     direction: "rtl",

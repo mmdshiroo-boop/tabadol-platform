@@ -1,4 +1,3 @@
-// backend/src/controllers/auth.controller.ts
 import { Request, Response } from "express";
 import { User } from "../models/User.model";
 import { Otp } from "../models/Otp.model";
@@ -17,7 +16,9 @@ import { WebhookService } from "../services/webhook.service";
 import { createAuditLog } from "../services/auditLog.service";
 import { CookieMonitorService } from "../services/cookieMonitor.service";
 import { AuditAction } from "../models/AuditLog.model";
-
+import { generateReferralCode, grantPoints, applyReferralCode } from "../services/loyalty.service";
+import { LOYALTY_RULES } from "../config/loyalty";
+import { addMemberByUserId } from "../services/agentClub.service";
 const generateCode = (): string => {
   return "123456";
 };
@@ -82,12 +83,13 @@ export const login = async (req: Request, res: Response) => {
     if (!user) {
       const agent = (await Agent.findOne({ phone }).lean()) as any;
       if (agent) {
-        user = await User.findById(agent._id).select("+password");
+        user = await User.findById(agent.userId).select("+password");
         if (user) {
           isAgent = true;
           user.agentId = agent._id;
           user.agencyId = agent.agencyId;
           user.agentStatus = agent.status;
+          user.isVerified = agent.isVerified;
         }
       }
     }
@@ -181,6 +183,7 @@ export const login = async (req: Request, res: Response) => {
       lastName: user.lastName || "",
       role: isAgent ? "agent" : user.role,
       avatar: user.avatar || "",
+      isVerified: user.isVerified || false,
     };
 
     return res.status(200).json({ success: true, token, data: userData });
@@ -287,8 +290,7 @@ export const changePassword = async (req: AuthRequest, res: Response) => {
 // ================== VERIFY CODE & AUTH ==================
 export const verifyCodeAndAuth = async (req: Request, res: Response) => {
   try {
-    const { phone, code, nationalCode, firstName, lastName, password } =
-      req.body;
+    const { phone, code, nationalCode, firstName, lastName, password, referralCode } = req.body;
     if (!phone || !code)
       return res.status(400).json({
         success: false,
@@ -322,10 +324,39 @@ export const verifyCodeAndAuth = async (req: Request, res: Response) => {
         isActive: true,
         isBanned: false,
         role: "user",
-        lastLogin: new Date(), // ✅ اولین ورود ثبت می‌شود
+        lastLogin: new Date(),
       });
       await user.save();
       isNewUser = true;
+
+      // 🆕 تولید کد معرف یکتا
+      user.referralCode = await generateReferralCode();
+      await user.save();
+
+      // 🆕 اعطای امتیاز ثبت‌نام
+      await grantPoints(
+        user._id.toString(),
+        LOYALTY_RULES.REGISTRATION,
+        "registration",
+        "امتیاز ثبت‌نام"
+      );
+
+      // 🆕 در صورت وجود کد معرف، اعمال پاداش معرفی
+// 🆕 افزودن خودکار کاربر به باشگاه مشاور معرف
+if (referralCode) {
+  const referrer = await User.findOne({ referralCode: referralCode.toUpperCase() });
+  if (referrer && referrer.role === "agent") {
+    const agent = await Agent.findOne({ userId: referrer._id });
+    if (agent) {
+      try {
+        await addMemberByUserId(agent._id.toString(), user._id.toString());
+        console.log(`✅ کاربر ${user.phone} به باشگاه مشاور ${agent.firstName} اضافه شد`);
+      } catch (err) {
+        console.error("❌ افزودن به باشگاه ناموفق:", err);
+      }
+    }
+  }
+}
 
       await WebhookService.dispatchEvent("user.registered", {
         userId: user._id,
@@ -359,7 +390,6 @@ export const verifyCodeAndAuth = async (req: Request, res: Response) => {
         req,
       });
 
-      // ✅ ارسال نوتیفیکیشن خوش‌آمدگویی برای کاربر جدید
       await sendNotificationToUser(
         user._id.toString(),
         "🎉 خوش آمدید",
@@ -368,11 +398,10 @@ export const verifyCodeAndAuth = async (req: Request, res: Response) => {
         "/panel/user/dashboard",
       );
     } else {
-      // ✅ تشخیص اولین ورود برای کاربران موجود
       const isFirstLogin = !user.lastLogin;
 
       user.phoneVerified = true;
-      user.lastLogin = new Date(); // به‌روزرسانی lastLogin
+      user.lastLogin = new Date();
       await user.save();
 
       await createAuditLog({
@@ -384,7 +413,6 @@ export const verifyCodeAndAuth = async (req: Request, res: Response) => {
         req,
       });
 
-      // ✅ فقط در صورت اولین ورود، نوتیفیکیشن خوش‌آمدگویی ارسال شود
       if (isFirstLogin) {
         await sendNotificationToUser(
           user._id.toString(),
@@ -428,6 +456,7 @@ export const verifyCodeAndAuth = async (req: Request, res: Response) => {
         avatar: user.avatar || "/images/user.webp",
         phoneVerified: user.phoneVerified,
         nationalCodeVerified: user.nationalCodeVerified,
+        isVerified: user.isVerified || false,
       },
       token,
     });
@@ -452,8 +481,11 @@ export const loginWithPassword = async (req: Request, res: Response) => {
     let isAgent = false;
 
     if (!user) {
-      user = await Agent.findOne({ phone }).select("+password");
-      if (user) isAgent = true;
+      const agent = await Agent.findOne({ phone }).select("+password");
+      if (agent) {
+        user = await User.findById(agent.userId).select("+password");
+        isAgent = true;
+      }
     }
 
     if (!user) {
@@ -486,7 +518,6 @@ export const loginWithPassword = async (req: Request, res: Response) => {
       }
     }
 
-    // ✅ تشخیص اولین ورود و به‌روزرسانی lastLogin
     const isFirstLogin = !user.lastLogin;
     user.lastLogin = new Date();
     await user.save();
@@ -504,16 +535,16 @@ export const loginWithPassword = async (req: Request, res: Response) => {
       sessionId,
       type: "login",
       ip: req.ip || req.socket.remoteAddress || "unknown",
-     userAgent: req.headers["user-agent"] || "",
-  cookieName: "access_token",
-  status: "success",
-  navigation: {
-    currentPath: req.originalUrl,
-    referrer: req.headers["referer"] || "",
-  },
-  cookieData: {
-    name: "access_token",
-  },
+      userAgent: req.headers["user-agent"] || "",
+      cookieName: "access_token",
+      status: "success",
+      navigation: {
+        currentPath: req.originalUrl,
+        referrer: req.headers["referer"] || "",
+      },
+      cookieData: {
+        name: "access_token",
+      },
     });
 
     await createAuditLog({
@@ -525,7 +556,6 @@ export const loginWithPassword = async (req: Request, res: Response) => {
       req,
     });
 
-    // ✅ فقط در صورت اولین ورود، نوتیفیکیشن خوش‌آمدگویی ارسال شود
     if (isFirstLogin) {
       await sendNotificationToUser(
         user._id.toString(),
@@ -543,6 +573,7 @@ export const loginWithPassword = async (req: Request, res: Response) => {
       lastName: user.lastName || "",
       role: isAgent ? "agent" : user.role,
       avatar: user.avatar || "",
+      isVerified: user.isVerified || false,
     };
 
     if (isAgent) {
@@ -604,12 +635,13 @@ export const getMe = async (req: AuthRequest, res: Response) => {
         .json({ success: false, message: "کاربر یافت نشد" });
 
     if (user.role === "agent") {
-      const agent = (await Agent.findOne({ _id: userId }).lean()) as any;
+      const agent = (await Agent.findOne({ userId }).lean()) as any;
       if (agent) {
         (user as any).agentId = agent._id;
         (user as any).agencyId = agent.agencyId;
         (user as any).agentStatus = agent.status;
         (user as any).propertiesCount = agent.propertiesCount || 0;
+        (user as any).isVerified = agent.isVerified;
       }
     }
 
@@ -643,12 +675,10 @@ export const logout = async (req: AuthRequest, res: Response) => {
   }
 };
 
-
 export const resetPassword = async (req: Request, res: Response) => {
   try {
     const { phone, code, newPassword } = req.body;
 
-    // اعتبارسنجی ورودی‌ها
     if (!phone || !code || !newPassword) {
       return res.status(400).json({
         success: false,
@@ -670,7 +700,6 @@ export const resetPassword = async (req: Request, res: Response) => {
       });
     }
 
-    // بررسی کد OTP
     const otpRecord = await Otp.findOne({
       phone,
       code,
@@ -685,7 +714,6 @@ export const resetPassword = async (req: Request, res: Response) => {
       });
     }
 
-    // پیدا کردن کاربر
     const user = await User.findOne({ phone }).select("+password");
     if (!user) {
       return res.status(404).json({
@@ -694,15 +722,12 @@ export const resetPassword = async (req: Request, res: Response) => {
       });
     }
 
-    // تغییر رمز عبور — مستقیم مقداردهی کنید چون pre-save hook هش می‌کند
     user.password = newPassword;
     await user.save();
 
-    // کد OTP را مصرف‌شده علامت بزنید
     otpRecord.isUsed = true;
     await otpRecord.save();
 
-    // ثبت audit log
     await createAuditLog({
       userId: user._id.toString(),
       action: AuditAction.USER_CHANGE_PASSWORD,

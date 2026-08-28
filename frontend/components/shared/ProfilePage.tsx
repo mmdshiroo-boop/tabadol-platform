@@ -48,7 +48,20 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
 import apiClient from "@/services/api/client";
-import { LocationSelector } from "@/components/ui/LocationSelector";
+import {
+  IranLocationSelector,
+  SelectedLocation,
+} from "@/components/ui/IranLocationSelector";
+import {
+  getById,
+  findProvinceByName,
+  findCountyByName,
+  getDistricts,
+  normalizeName,
+  loadDivisions,
+} from "@/lib/iranDivisions";
+import VerifiedBadge from "@/components/common/VerifiedBadge";
+import { FollowListModal } from "@/components/follow/FollowListModal";
 
 // ==================== کانفیگ نقش‌ها ====================
 
@@ -252,6 +265,16 @@ export default function ProfilePage({
   const [district, setDistrict] = useState("");
   const [extraValues, setExtraValues] = useState<Record<string, string>>({});
 
+  // موقعیت مکانی جدید
+  const [location, setLocation] = useState<SelectedLocation>({});
+
+  // فالو
+  const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
+  const [followModal, setFollowModal] = useState<{ open: boolean; type: "followers" | "following" }>({
+    open: false,
+    type: "followers",
+  });
+
   // رمز عبور
   const [showPasswordSection, setShowPasswordSection] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -267,6 +290,12 @@ export default function ProfilePage({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   useEffect(() => {
+  let isMounted = true;
+
+  async function init() {
+    // ابتدا تقسیمات کشوری را بارگذاری کن
+    await loadDivisions();
+
     if (user) {
       setFirstName(user.firstName || "");
       setLastName(user.lastName || "");
@@ -277,6 +306,26 @@ export default function ProfilePage({
       setCity(user.city || "");
       setDistrict(user.district || "");
 
+      const foundProvince = user.province
+        ? findProvinceByName(user.province)
+        : undefined;
+      const foundCounty =
+        user.city && foundProvince
+          ? findCountyByName(foundProvince.Id, user.city)
+          : undefined;
+      const foundDistrict =
+        user.district && foundCounty
+          ? getDistricts(foundCounty.Id).find(
+(d) => normalizeName(d.Name) === normalizeName((user.district || "")),
+            )
+          : undefined;
+
+      setLocation({
+        provinceId: foundProvince?.Id,
+        countyId: foundCounty?.Id,
+        districtId: foundDistrict?.Id,
+      });
+
       if (roleConfig.extraFields) {
         const values: Record<string, string> = {};
         roleConfig.extraFields.forEach((f) => {
@@ -286,7 +335,24 @@ export default function ProfilePage({
       }
       setLoading(false);
     }
-  }, [user]);
+  }
+
+  init();
+  return () => { isMounted = false; };
+}, [user]);
+  // دریافت آمار فالو
+  useEffect(() => {
+    if (!user?._id) return;
+    const fetchFollowCounts = async () => {
+      try {
+        const res = await apiClient.get(`/follow/counts/${user._id}`);
+        setFollowCounts(res.data.data);
+      } catch (error) {
+        console.error("Error fetching follow counts:", error);
+      }
+    };
+    fetchFollowCounts();
+  }, [user?._id]);
 
   const handleUploadAvatar = async (file: File) => {
     if (!file) return;
@@ -459,15 +525,15 @@ export default function ProfilePage({
             <div className="relative h-32 bg-gradient-to-br from-primary/20 via-transparent to-transparent" />
             <div className="px-6 pb-6 pt-0 flex flex-col items-center text-center -mt-16">
               <div className="relative group rounded-full p-1 bg-background shadow-xl mb-5">
-             <Avatar className="w-32 h-32 rounded-full border-4 border-background object-cover">
-  <AvatarImage
-    key={avatarKey}
-    src={avatarSrc || "/images/user.webp"}
-    alt="تصویر کاربر"
-    className="object-cover"
-  />
-  <AvatarFallback />
-</Avatar>
+                <Avatar className="w-32 h-32 rounded-full border-4 border-background object-cover">
+                  <AvatarImage
+                    key={avatarKey}
+                    src={avatarSrc || "/images/user.webp"}
+                    alt="تصویر کاربر"
+                    className="object-cover"
+                  />
+                  <AvatarFallback />
+                </Avatar>
 
                 <div className="absolute inset-1 rounded-full bg-black/60 opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col items-center justify-center gap-2 backdrop-blur-sm">
                   <button
@@ -503,11 +569,33 @@ export default function ProfilePage({
                 />
               </div>
 
-              <h2 className="text-xl sm:text-2xl font-black text-foreground">
-                {firstName || lastName
-                  ? `${firstName} ${lastName}`
-                  : "کاربر مهمان"}
-              </h2>
+              {/* نمایش تیک آبی */}
+              <div className="flex items-center gap-2 justify-center">
+                <h2 className="text-xl sm:text-2xl font-black text-foreground">
+                  {firstName || lastName
+                    ? `${firstName} ${lastName}`
+                    : "کاربر مهمان"}
+                </h2>
+{(user as any)?.isVerified && <VerifiedBadge size="lg" />}              </div>
+
+              {/* فالوور / دنبال‌شونده */}
+              <div className="flex items-center justify-center gap-4 mt-4">
+                <button
+                  onClick={() => setFollowModal({ open: true, type: "followers" })}
+                  className="hover:bg-muted/40 rounded-xl px-3 py-1.5 transition-colors"
+                >
+                  <span className="font-bold">{followCounts.followers}</span>{" "}
+                  <span className="text-muted-foreground text-sm">فالوور</span>
+                </button>
+                <div className="w-px h-5 bg-border" />
+                <button
+                  onClick={() => setFollowModal({ open: true, type: "following" })}
+                  className="hover:bg-muted/40 rounded-xl px-3 py-1.5 transition-colors"
+                >
+                  <span className="font-bold">{followCounts.following}</span>{" "}
+                  <span className="text-muted-foreground text-sm">دنبال‌شونده</span>
+                </button>
+              </div>
 
               {roleConfig.showAgencyField && agencyName && (
                 <div className="flex items-center gap-1.5 text-primary font-medium mt-2 bg-primary/10 px-3 py-1 rounded-full text-sm">
@@ -558,7 +646,7 @@ export default function ProfilePage({
 
         {/* ستون اصلی راست: فرم ویرایش اطلاعات */}
         <div className="lg:col-span-8 space-y-6 md:space-y-8">
-          {/* کارت ۱: اطلاعات شخصی و موقعیت مکانی (داری relative z-20 برای عدم برش Dropdown) */}
+          {/* کارت ۱: اطلاعات شخصی و موقعیت مکانی */}
           <Card className="relative z-20 border border-border/50 shadow-lg rounded-3xl bg-card/50 backdrop-blur-xl">
             <CardHeader className="bg-muted/20 border-b border-border/50 pb-5 pt-6 px-6 sm:px-8">
               <CardTitle className="text-lg font-bold flex items-center gap-2">
@@ -635,24 +723,24 @@ export default function ProfilePage({
                 </div>
               </div>
 
-              {/* موقعیت مکانی با استفاده از LocationSelector */}
+              {/* موقعیت مکانی */}
               <div className="space-y-4 pt-2">
                 <h3 className="text-sm font-bold text-muted-foreground border-b border-border/50 pb-2">
                   موقعیت مکانی
                 </h3>
-                <LocationSelector
-                  province={province}
-                  city={city}
-                  district={district}
-                  onChange={(field, value) => {
-                    if (field === "province") setProvince(value);
-                    if (field === "city") setCity(value);
-                    if (field === "district") setDistrict(value);
+                <IranLocationSelector
+                  value={location}
+                  onChange={(loc) => {
+                    setLocation(loc);
+                    setProvince(loc.provinceId ? getById(loc.provinceId)?.Name || "" : "");
+                    setCity(loc.countyId ? getById(loc.countyId)?.Name || "" : "");
+                    setDistrict(loc.districtId ? getById(loc.districtId)?.Name || "" : "");
                   }}
+                  showOptionalDistrict={true}
                 />
               </div>
 
-              {/* فیلدهای تکمیلی داینامیک */}
+              {/* فیلدهای تکمیلی */}
               {roleConfig.extraFields && roleConfig.extraFields.length > 0 && (
                 <div className="space-y-4 pt-2">
                   <h3 className="text-sm font-bold text-muted-foreground border-b border-border/50 pb-2">
@@ -704,7 +792,7 @@ export default function ProfilePage({
             </CardContent>
           </Card>
 
-          {/* کارت ۲: امنیت و رمز عبور (دارای relative z-10) */}
+          {/* کارت ۲: امنیت و رمز عبور */}
           <Card className="relative z-10 border border-border/50 shadow-lg rounded-3xl bg-card/50 backdrop-blur-xl">
             <CardHeader className="bg-muted/20 border-b border-border/50 pb-5 pt-6 px-6 sm:px-8">
               <CardTitle className="text-lg font-bold flex items-center gap-2">
@@ -869,6 +957,16 @@ export default function ProfilePage({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* مودال لیست فالوور/دنبال‌شونده */}
+      {user && (
+        <FollowListModal
+          open={followModal.open}
+          onClose={() => setFollowModal({ ...followModal, open: false })}
+          userId={user._id}
+          type={followModal.type}
+        />
+      )}
     </div>
   );
 }

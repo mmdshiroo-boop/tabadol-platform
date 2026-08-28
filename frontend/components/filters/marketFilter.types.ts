@@ -1,9 +1,9 @@
-// components/filters/marketFilter.types.ts
-
 export interface MarketFilterValues {
   tradeType: string;
   propertyType: string;
   priceRange: string;
+  rentDepositRange: string;
+  rentMonthlyRange: string;
   sizeRange: string;
   buildingAge: string;
   roomsCount: string;
@@ -23,6 +23,8 @@ export const DEFAULT_MARKET_FILTER_VALUES: MarketFilterValues = {
   tradeType: "",
   propertyType: "none",
   priceRange: "none",
+  rentDepositRange: "none",
+  rentMonthlyRange: "none",
   sizeRange: "none",
   buildingAge: "none",
   roomsCount: "none",
@@ -46,6 +48,22 @@ export const PRICE_RANGE_OPTIONS = [
   { value: "5-10", label: "۵-۱۰ میلیارد" },
   { value: "10-20", label: "۱۰-۲۰ میلیارد" },
   { value: "20+", label: "بالای ۲۰ میلیارد" },
+];
+
+export const RENT_DEPOSIT_RANGE_OPTIONS = [
+  { value: "none", label: "همه" },
+  { value: "0-500", label: "تا ۵۰۰ میلیون" },
+  { value: "500-1000", label: "۵۰۰ تا ۱ میلیارد" },
+  { value: "1000-2000", label: "۱ تا ۲ میلیارد" },
+  { value: "2000+", label: "بالای ۲ میلیارد" },
+];
+
+export const RENT_MONTHLY_RANGE_OPTIONS = [
+  { value: "none", label: "همه" },
+  { value: "0-10", label: "تا ۱۰ میلیون" },
+  { value: "10-20", label: "۱۰ تا ۲۰ میلیون" },
+  { value: "20-50", label: "۲۰ تا ۵۰ میلیون" },
+  { value: "50+", label: "بالای ۵۰ میلیون" },
 ];
 
 export const SIZE_RANGE_OPTIONS = [

@@ -19,7 +19,6 @@ import {
   upgradeToVipAd,
   verifyIdentity,
   getMyAds,
-  getPublicProfile,
   unblockUser,
   blockUser,
   checkBlockStatus,
@@ -27,13 +26,12 @@ import {
 } from "../controllers/user.controller";
 import path from "path";
 import fs from "fs";
-import { User } from "../models";
 import { FileArray } from "express-fileupload";
 import {
   getNotificationSettings,
   updateNotificationSettings,
 } from "../controllers/notificationSetting.controller";
-
+import { User } from "../models";
 const router = Router();
 
 router.post(
@@ -125,7 +123,6 @@ router.put("/profile", protect, updateProfile);
 router.post("/profile/change-password", protect, changePassword);
 router.put("/change-password", protect, changePassword);
 router.get("/my-ads", protect, getMyAds);
-router.get("/public/:id", getPublicProfile);
 router.post("/block", protect, blockUser);
 router.post("/unblock", protect, unblockUser);
 router.get("/is-blocked/:userId", protect, checkBlockStatus);
@@ -159,5 +156,4 @@ router.put(
 router.put("/admin/:id/ban", protect, hasPermission("users:ban"), banUser);
 router.put("/admin/:id/unban", protect, hasPermission("users:ban"), unbanUser);
 router.delete("/admin/:id", protect, hasPermission("users:delete"), deleteUser);
-
 export default router;

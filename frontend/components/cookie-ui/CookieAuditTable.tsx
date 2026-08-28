@@ -1,3 +1,4 @@
+// components/cookie-ui/CookieAuditTable.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -43,12 +44,16 @@ import {
   Activity,
   Compass,
   Calendar,
+  FileCode,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { format, startOfDay, endOfDay, subDays } from "date-fns";
 import { faIR } from "date-fns/locale";
+import DatePicker, { DateObject } from "react-multi-date-picker";
+import persian from "react-date-object/calendars/persian";
+import persian_fa from "react-date-object/locales/persian_fa";
 import { exportToExcel, exportToPDF } from "./cookieAuditExport";
 import type { CookieAuditLog } from "@/types";
 import apiClient from "@/services/api/client";
@@ -171,15 +176,16 @@ const STATUS_CONFIG: Record<
 export default function CookieAuditTable({
   onViewDetail,
   onViewUser,
+  onDownloadReport,
 }: {
   onViewDetail?: (log: CookieAuditLog) => void;
   onViewUser?: (userId: string) => void;
+  onDownloadReport?: (userId: string) => void;
 }) {
   const [logs, setLogs] = useState<CookieAuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
-  // نگهداری مسیرهای استخراج‌شده از PageView برای هر sessionId
   const [pathMap, setPathMap] = useState<Record<string, string>>({});
   const [pathsLoading, setPathsLoading] = useState(false);
 
@@ -196,8 +202,9 @@ export default function CookieAuditTable({
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [roleFilter, setRoleFilter] = useState("all");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  // جدید: DateObject به‌جای رشته متنی
+  const [startDateObj, setStartDateObj] = useState<DateObject | null>(null);
+  const [endDateObj, setEndDateObj] = useState<DateObject | null>(null);
 
   const fetchLogs = useCallback(
     async (page = 1) => {
@@ -211,16 +218,19 @@ export default function CookieAuditTable({
         if (typeFilter !== "all") params.set("type", typeFilter);
         if (statusFilter !== "all") params.set("status", statusFilter);
         if (roleFilter !== "all") params.set("role", roleFilter);
-        if (startDate) params.set("startDate", startDate);
-        if (endDate) params.set("endDate", endDate);
+        if (startDateObj) {
+          params.set("startDate", startDateObj.toDate().toISOString());
+        }
+        if (endDateObj) {
+          params.set("endDate", endDateObj.toDate().toISOString());
+        }
         const res = await apiClient.get(
-          `/super-admin/cookie-audits?${params.toString()}`
+          `/super-admin/cookie-audits?${params.toString()}`,
         );
         if (res.data?.success) {
           const newLogs: CookieAuditLog[] = res.data.data;
           setLogs(newLogs);
           setPagination(res.data.pagination);
-          // استخراج مسیرهای مربوط به sessionIdها از PageView
           fetchPathsForLogs(newLogs);
         }
       } catch {
@@ -235,18 +245,16 @@ export default function CookieAuditTable({
       typeFilter,
       statusFilter,
       roleFilter,
-      startDate,
-      endDate,
+      startDateObj,
+      endDateObj,
       pagination.limit,
-    ]
+    ],
   );
 
-  // دریافت مسیرها از PageView برای sessionIdهای موجود در لاگ‌ها
   const fetchPathsForLogs = async (logs: CookieAuditLog[]) => {
-    // جمع‌آوری sessionIdهای یکتا که sessionId دارند
     const sessionIds = [
       ...new Set(
-        logs.map((log) => log.sessionId).filter((id): id is string => !!id)
+        logs.map((log) => log.sessionId).filter((id): id is string => !!id),
       ),
     ];
     if (sessionIds.length === 0) return;
@@ -255,7 +263,6 @@ export default function CookieAuditTable({
     const newPathMap: Record<string, string> = {};
 
     try {
-      // ارسال درخواست‌های موازی برای هر sessionId (حداکثر 10 تا با هم)
       const chunkSize = 5;
       for (let i = 0; i < sessionIds.length; i += chunkSize) {
         const chunk = sessionIds.slice(i, i + chunkSize);
@@ -273,7 +280,7 @@ export default function CookieAuditTable({
               return { sid, path: res.data.data[0].path };
             }
           } catch {
-            // نادیده گرفتن خطا
+            // ignore
           }
           return { sid, path: undefined };
         });
@@ -298,12 +305,12 @@ export default function CookieAuditTable({
     () => ({
       total: pagination.total || logs.length,
       suspicious: logs.filter(
-        (l) => l.type === "suspicious" || l.status === "suspicious"
+        (l) => l.type === "suspicious" || l.status === "suspicious",
       ).length,
       pageViews: logs.filter((l) => l.type === "page_view").length,
       activeSessions: logs.filter((l) => l.status === "active").length,
     }),
-    [logs, pagination.total]
+    [logs, pagination.total],
   );
 
   const applyDatePreset = (preset: "today" | "7days" | "30days") => {
@@ -312,8 +319,24 @@ export default function CookieAuditTable({
     if (preset === "today") start = startOfDay(now);
     else if (preset === "7days") start = subDays(now, 7);
     else start = subDays(now, 30);
-    setStartDate(format(start, "yyyy-MM-dd"));
-    setEndDate(format(endOfDay(now), "yyyy-MM-dd"));
+
+    const startDate = startOfDay(start);
+    const endDate = endOfDay(now);
+
+    setStartDateObj(
+      new DateObject({
+        date: startDate,
+        calendar: persian,
+        locale: persian_fa,
+      }),
+    );
+    setEndDateObj(
+      new DateObject({
+        date: endDate,
+        calendar: persian,
+        locale: persian_fa,
+      }),
+    );
   };
 
   const handleExport = async (type: "excel" | "pdf") => {
@@ -327,10 +350,14 @@ export default function CookieAuditTable({
       if (typeFilter !== "all") params.set("type", typeFilter);
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (roleFilter !== "all") params.set("role", roleFilter);
-      if (startDate) params.set("startDate", startDate);
-      if (endDate) params.set("endDate", endDate);
+      if (startDateObj) {
+        params.set("startDate", startDateObj.toDate().toISOString());
+      }
+      if (endDateObj) {
+        params.set("endDate", endDateObj.toDate().toISOString());
+      }
       const res = await apiClient.get(
-        `/super-admin/cookie-audits?${params.toString()}`
+        `/super-admin/cookie-audits?${params.toString()}`,
       );
       const allLogs: CookieAuditLog[] = res.data?.data || logs;
       if (allLogs.length === 0) {
@@ -382,8 +409,8 @@ export default function CookieAuditTable({
     setTypeFilter("all");
     setStatusFilter("all");
     setRoleFilter("all");
-    setStartDate("");
-    setEndDate("");
+    setStartDateObj(null);
+    setEndDateObj(null);
   };
 
   const hasActiveFilters =
@@ -392,25 +419,20 @@ export default function CookieAuditTable({
     typeFilter !== "all" ||
     statusFilter !== "all" ||
     roleFilter !== "all" ||
-    startDate ||
-    endDate;
+    startDateObj ||
+    endDateObj;
 
   const handleRowClick = (log: CookieAuditLog) => {
     if (onViewDetail) onViewDetail(log);
   };
 
-  // تابع کمکی برای بدست آوردن محتوای ستون مسیر/داده کوکی
   const getPathOrCookieInfo = (log: CookieAuditLog) => {
-    // اولویت: مسیر navigation.currentPath (اگر بک‌اند فرستاده باشد)
     if (log.navigation?.currentPath) return log.navigation.currentPath;
-    // سپس مسیر گرفته‌شده از PageView با sessionId
     if (log.sessionId && pathMap[log.sessionId]) {
       return pathMap[log.sessionId];
     }
-    // سپس نام کوکی
     if (log.cookieName) return `Cookie: ${log.cookieName}`;
     if (log.cookieData?.name) return `Cookie: ${log.cookieData.name}`;
-    // توصیف نوع رویداد
     return null;
   };
 
@@ -548,18 +570,29 @@ export default function CookieAuditTable({
               <SelectItem value="admin">مدیر</SelectItem>
             </SelectContent>
           </Select>
-          <Input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="h-9 text-xs"
-          />
-          <Input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="h-9 text-xs"
-          />
+          {/* Date pickers */}
+          <div>
+            <DatePicker
+              value={startDateObj}
+              onChange={(date: DateObject | null) => setStartDateObj(date)}
+              calendar={persian}
+              locale={persian_fa}
+              format="YYYY/MM/DD"
+              placeholder="از تاریخ"
+              className="w-full border border-input rounded-lg p-2 text-sm bg-background"
+            />
+          </div>
+          <div>
+            <DatePicker
+              value={endDateObj}
+              onChange={(date: DateObject | null) => setEndDateObj(date)}
+              calendar={persian}
+              locale={persian_fa}
+              format="YYYY/MM/DD"
+              placeholder="تا تاریخ"
+              className="w-full border border-input rounded-lg p-2 text-sm bg-background"
+            />
+          </div>
         </div>
       </div>
 
@@ -620,21 +653,20 @@ export default function CookieAuditTable({
               ) : (
                 <AnimatePresence>
                   {logs.map((log, idx) => {
-                  const typeInfo = TYPE_MAP[log.type] || {
-  label: log.type,
-  icon: ShieldAlert,
-  color: "text-gray-600 bg-gray-50 border-gray-200",
-};
-               const statusInfo = STATUS_CONFIG[log.status] || {
-  label: log.status,
-  icon: AlertTriangle,
-  color: "text-gray-500",
-  dot: "bg-gray-400",
-};
+                    const typeInfo = TYPE_MAP[log.type] || {
+                      label: log.type,
+                      icon: ShieldAlert,
+                      color: "text-gray-600 bg-gray-50 border-gray-200",
+                    };
+                    const statusInfo = STATUS_CONFIG[log.status] || {
+                      label: log.status,
+                      icon: AlertTriangle,
+                      color: "text-gray-500",
+                      dot: "bg-gray-400",
+                    };
                     const ua = parseUA(log.userAgent);
                     const TypeIcon = typeInfo.icon;
 
-                    // آماده‌سازی نام کاربر
                     const userObj = log.userId;
                     const fullName =
                       userObj?.firstName || userObj?.lastName
@@ -645,7 +677,6 @@ export default function CookieAuditTable({
                       ? getImageUrl(userObj.avatar)
                       : "/images/user.webp";
 
-                    // محتوای ستون مسیر/داده کوکی
                     const pathOrCookie = getPathOrCookieInfo(log);
 
                     return (
@@ -658,7 +689,7 @@ export default function CookieAuditTable({
                         className={cn(
                           "border-b border-border/50 hover:bg-orange-50/40 transition-colors cursor-pointer",
                           log.type === "suspicious" &&
-                            "bg-red-50/30 hover:bg-red-50/50"
+                            "bg-red-50/30 hover:bg-red-50/50",
                         )}
                         onClick={() => handleRowClick(log)}
                       >
@@ -695,7 +726,7 @@ export default function CookieAuditTable({
                             variant="outline"
                             className={cn(
                               "gap-1 text-[10px] font-bold rounded-lg px-2 py-0.5 inline-flex items-center",
-                              typeInfo.color
+                              typeInfo.color,
                             )}
                           >
                             <TypeIcon className="w-3 h-3" />
@@ -707,13 +738,13 @@ export default function CookieAuditTable({
                             <span
                               className={cn(
                                 "w-1.5 h-1.5 rounded-full",
-                                statusInfo.dot
+                                statusInfo.dot,
                               )}
                             />
                             <span
                               className={cn(
                                 "text-[11px] font-bold",
-                                statusInfo.color
+                                statusInfo.color,
                               )}
                             >
                               {statusInfo.label}
@@ -788,6 +819,20 @@ export default function CookieAuditTable({
                                 <User className="w-3.5 h-3.5" />
                               </Button>
                             )}
+                            {log.userId?._id && onDownloadReport && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 rounded-lg hover:bg-emerald-100 hover:text-emerald-600"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDownloadReport?.(log.userId!._id.toString());
+                                }}
+                                title="دانلود گزارش کامل رفتار کاربر"
+                              >
+                                <FileCode className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </motion.tr>
@@ -810,7 +855,7 @@ export default function CookieAuditTable({
                 <span className="font-bold text-foreground">
                   {Math.min(
                     pagination.page * pagination.limit,
-                    pagination.total
+                    pagination.total,
                   )}
                 </span>{" "}
                 از{" "}
@@ -866,13 +911,13 @@ export default function CookieAuditTable({
                       className={cn(
                         "h-8 w-8 p-0 rounded-lg text-xs",
                         pageNum === pagination.page &&
-                          "bg-orange-500 hover:bg-orange-600 text-white"
+                          "bg-orange-500 hover:bg-orange-600 text-white",
                       )}
                     >
                       {pageNum}
                     </Button>
                   );
-                }
+                },
               )}
               <Button
                 variant="outline"

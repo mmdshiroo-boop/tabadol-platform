@@ -6,12 +6,15 @@ import { toast } from "sonner";
 import apiClient from "@/services/api/client";
 import { useAuth } from "@/app/context/AuthContext";
 import { MessageSquare, Reply, ChevronDown, ChevronUp } from "lucide-react";
+import Link from "next/link";
+import VerifiedBadge from "@/components/common/VerifiedBadge";
 
 interface CommentUser {
   _id: string;
   firstName: string;
   lastName: string;
   avatar?: string;
+  isVerified?: boolean;
 }
 
 interface Comment {
@@ -69,7 +72,6 @@ export function CommentsSection({ adId }: { adId: string }) {
     }
   };
 
-  // ساخت درخت کامنت‌ها
   const buildCommentTree = (flatComments: Comment[]) => {
     const map = new Map<string, Comment & { replies: Comment[] }>();
     const roots: (Comment & { replies: Comment[] })[] = [];
@@ -102,7 +104,6 @@ export function CommentsSection({ adId }: { adId: string }) {
         </span>
       </div>
 
-      {/* فرم ارسال نظر اصلی */}
       {user && (
         <div className="space-y-3 bg-muted/20 p-4 rounded-xl border">
           <Textarea
@@ -122,7 +123,6 @@ export function CommentsSection({ adId }: { adId: string }) {
         </div>
       )}
 
-      {/* لیست نظرات */}
       {commentTree.length === 0 && !user && (
         <p className="text-muted-foreground text-center py-4">
           هنوز نظری ثبت نشده است. برای ثبت نظر وارد شوید.
@@ -155,7 +155,6 @@ export function CommentsSection({ adId }: { adId: string }) {
   );
 }
 
-// کامپوننت بازگشتی برای نمایش یک نظر و پاسخ‌هایش
 function CommentItem({
   comment,
   onReply,
@@ -184,9 +183,15 @@ function CommentItem({
           </div>
           <div className="flex-1">
             <div className="flex justify-between">
-              <span className="font-semibold text-sm">
-                {comment.user.firstName} {comment.user.lastName}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <Link
+                  href={`/profile/${comment.user._id}`}
+                  className="font-semibold text-sm hover:underline underline-offset-4"
+                >
+                  {comment.user.firstName} {comment.user.lastName}
+                </Link>
+                {comment.user.isVerified && <VerifiedBadge size="sm" />}
+              </div>
               <span className="text-xs text-muted-foreground">
                 {new Date(comment.createdAt).toLocaleDateString("fa-IR")}
               </span>
@@ -201,7 +206,6 @@ function CommentItem({
           </div>
         </div>
 
-        {/* فرم پاسخ */}
         {replyTo === comment._id && (
           <div className="mt-3 mr-10 bg-muted/30 p-3 rounded-lg border">
             <Textarea
@@ -231,7 +235,6 @@ function CommentItem({
         )}
       </div>
 
-      {/* پاسخ‌ها */}
       {comment.replies && comment.replies.length > 0 && (
         <div className="mr-6 border-r-2 border-muted-foreground/20 pr-4 space-y-3">
           <button

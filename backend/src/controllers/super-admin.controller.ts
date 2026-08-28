@@ -1,8 +1,17 @@
-// backend/src/controllers/super-admin.controller.ts
+// ============================================================
+// 📁 backend/src/controllers/super-admin.controller.ts
+// ============================================================
+// (نسخه کامل با توابع گزارش رفتار کاربر و دانلود)
+
 import { Request, Response } from "express";
 import { User } from "../models/User.model";
 import { Ad } from "../models/Ad.model";
 import { Property } from "../models/Property.model";
+import { AuditLog, AuditAction } from "../models/AuditLog.model";
+import { PageView } from "../models/PageView.model";
+import { Favorite } from "../models/Favorite.model";
+import { Comment } from "../models/Comment.model";
+import { Reaction } from "../models/Reaction.model";
 import mongoose from "mongoose";
 import {
   notifyDevelopers,
@@ -11,9 +20,11 @@ import {
 } from "../services/notification.service";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { createAuditLog } from "../services/auditLog.service";
-import { AuditAction } from "../models/AuditLog.model";
+import CookieAudit from "../models/CookieAudit";
 
-// ============ آمار داشبورد ============
+// ============================================================
+// آمار داشبورد
+// ============================================================
 export const getDashboardStats = async (req: Request, res: Response) => {
   try {
     const totalUsers = await User.countDocuments();
@@ -89,7 +100,9 @@ async function getDatabaseSize(): Promise<string> {
   }
 }
 
-// ============ مدیریت ادمین‌ها ============
+// ============================================================
+// مدیریت ادمین‌ها
+// ============================================================
 export const getAllAdmins = async (req: Request, res: Response) => {
   try {
     const admins = await User.find({
@@ -127,7 +140,6 @@ export const createAdmin = async (req: AuthRequest, res: Response) => {
       isActive: true,
     });
 
-    // Audit log
     await createAuditLog({
       userId: req.user?._id.toString(),
       action: AuditAction.ADMIN_ROLE_CHANGE,
@@ -161,7 +173,6 @@ export const updateAdmin = async (req: AuthRequest, res: Response) => {
         .json({ success: false, message: "کاربر یافت نشد" });
     }
 
-    // Audit log
     await createAuditLog({
       userId: req.user?._id.toString(),
       action: AuditAction.ADMIN_ROLE_CHANGE,
@@ -198,10 +209,9 @@ export const deleteAdmin = async (req: AuthRequest, res: Response) => {
 
     await User.findByIdAndDelete(id);
 
-    // Audit log
     await createAuditLog({
       userId: req.user?._id.toString(),
-      action: AuditAction.SYSTEM, // or ADMIN_DELETED if added
+      action: AuditAction.SYSTEM,
       resource: "User",
       resourceId: id,
       description: `سوپرادمین ادمین با شناسه ${id} (${user.phone}) را حذف کرد.`,
@@ -215,7 +225,9 @@ export const deleteAdmin = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ============ مدیریت کاربران ============
+// ============================================================
+// مدیریت کاربران
+// ============================================================
 export const getAllUsersSuper = async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
@@ -284,7 +296,6 @@ export const blockUser = async (req: AuthRequest, res: Response) => {
       "/support",
     );
 
-    // Audit log
     await createAuditLog({
       userId: req.user?._id.toString(),
       action: AuditAction.ADMIN_USER_BAN,
@@ -333,7 +344,6 @@ export const unblockUser = async (req: AuthRequest, res: Response) => {
       "/dashboard",
     );
 
-    // Audit log
     await createAuditLog({
       userId: req.user?._id.toString(),
       action: AuditAction.ADMIN_USER_UNBAN,
@@ -352,7 +362,9 @@ export const unblockUser = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ============ مدیریت آگهی‌ها ============
+// ============================================================
+// مدیریت آگهی‌ها
+// ============================================================
 export const getAllAdsSuper = async (req: Request, res: Response) => {
   try {
     const {
@@ -417,7 +429,6 @@ export const forceDeleteAd = async (req: AuthRequest, res: Response) => {
 
     await Ad.findByIdAndDelete(id);
 
-    // Audit log
     await createAuditLog({
       userId: req.user?._id.toString(),
       action: AuditAction.AD_DELETED,
@@ -434,7 +445,9 @@ export const forceDeleteAd = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ============ تنظیمات سیستم ============
+// ============================================================
+// تنظیمات سیستم
+// ============================================================
 export const getSystemSettings = async (req: Request, res: Response) => {
   try {
     res.json({
@@ -448,7 +461,6 @@ export const getSystemSettings = async (req: Request, res: Response) => {
 
 export const updateSystemSettings = async (req: AuthRequest, res: Response) => {
   try {
-    // Audit log
     await createAuditLog({
       userId: req.user?._id.toString(),
       action: AuditAction.SYSTEM,
@@ -464,7 +476,9 @@ export const updateSystemSettings = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ============ لاگ‌ها ============
+// ============================================================
+// لاگ‌های سیستمی
+// ============================================================
 export const getSystemLogs = async (req: Request, res: Response) => {
   try {
     res.json({ success: true, data: [] });
@@ -473,7 +487,9 @@ export const getSystemLogs = async (req: Request, res: Response) => {
   }
 };
 
-// ============ بکاپ ============
+// ============================================================
+// بکاپ
+// ============================================================
 export const getBackupList = async (req: Request, res: Response) => {
   try {
     res.json({ success: true, data: [] });
@@ -503,7 +519,6 @@ export const createBackup = async (req: AuthRequest, res: Response) => {
       "/developer/logs",
     );
 
-    // Audit log
     await createAuditLog({
       userId: req.user?._id.toString(),
       action: AuditAction.SYSTEM,
@@ -520,5 +535,250 @@ export const createBackup = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error("Create backup error:", error);
     res.status(500).json({ success: false, message: "خطا در ایجاد بکاپ" });
+  }
+};
+
+// ============================================================
+// 📊 گزارش جامع رفتار کاربر (برای مدیر ارشد)
+// ============================================================
+export const getUserBehaviorReport = async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "شناسه کاربر الزامی است" });
+    }
+
+    const userObjectId = new mongoose.Types.ObjectId(userId as string);
+
+    // 1️⃣ اطلاعات هویتی کاربر
+    const user = await User.findById(userObjectId).select("-password").lean();
+    if (!user) {
+      return res.status(404).json({ success: false, message: "کاربر یافت نشد" });
+    }
+
+    // 2️⃣ بازدیدهای صفحه
+    const pageViews = await PageView.find({ userId: userObjectId })
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean();
+
+    // 3️⃣ لاگ‌های امنیتی (AuditLog)
+    const auditLogs = await AuditLog.find({ user: userObjectId })
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean();
+
+    // 4️⃣ رصد کوکی (CookieAudit)
+    const cookieAudits = await CookieAudit.find({ userId: userObjectId })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    // 5️⃣ علاقه‌مندی‌ها
+    const favorites = await Favorite.find({ userId: userObjectId })
+      .populate("adId", "title price city images status")
+      .lean();
+
+    // 6️⃣ نظرات
+    const comments = await Comment.find({ userId: userObjectId })
+      .populate("adId", "title")
+      .lean();
+
+    // 7️⃣ واکنش‌ها
+    const reactions = await Reaction.find({ userId: userObjectId }).lean();
+
+    // 8️⃣ آمار کلی
+    const stats = {
+      totalPageViews: pageViews.length,
+      totalAuditLogs: auditLogs.length,
+      totalCookieAudits: cookieAudits.length,
+      totalFavorites: favorites.length,
+      totalComments: comments.length,
+      totalReactions: reactions.length,
+      firstActivity: pageViews[pageViews.length - 1]?.createdAt || user.createdAt,
+      lastActivity: pageViews[0]?.createdAt || user.lastLogin || user.createdAt,
+    };
+
+    // 9️⃣ رفتار جستجو (استخراج از مسیرهای بازدید)
+    const searchPaths = pageViews
+      .filter((p) => p.path?.includes("/search") || p.path?.includes("/ad"))
+      .slice(0, 20)
+      .map((p) => ({
+        path: p.path,
+        referrer: p.referrer,
+        ip: p.ip,
+        createdAt: p.createdAt,
+      }));
+
+    // 🔟 ترکیب نهایی
+    const report = {
+      user: {
+        _id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone,
+        email: user.email,
+        role: user.role,
+        city: user.city,
+        province: user.province,
+        district: user.district,
+        nationalCode: user.nationalCode,
+        isVerified: user.isVerified,
+        isBanned: user.isBanned,
+        createdAt: user.createdAt,
+        lastLogin: user.lastLogin,
+        ip: (user as any).ip || "نامشخص",
+      },
+      stats,
+      pageViews: pageViews.slice(0, 50),
+      auditLogs: auditLogs.slice(0, 50),
+      cookieAudits: cookieAudits.slice(0, 30),
+      favorites: favorites.map((f) => ({
+        _id: f._id,
+        ad: f.adId,
+        createdAt: f.createdAt,
+      })),
+      comments: comments.slice(0, 20),
+      reactions: reactions.slice(0, 20),
+      searchBehavior: searchPaths,
+      generatedAt: new Date().toISOString(),
+    };
+
+    res.json({ success: true, data: report });
+  } catch (error) {
+    console.error("Error generating user behavior report:", error);
+    res.status(500).json({ success: false, message: "خطا در تولید گزارش رفتار کاربر" });
+  }
+};
+
+// ============================================================
+// 📥 دانلود گزارش رفتار کاربر (با فرمت‌های مختلف)
+// ============================================================
+
+export const downloadBehaviorReport = async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId, format = "json" } = req.body;
+    
+    console.log(`📥 Download report - UserId: ${userId}, Format: ${format}`);
+
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "شناسه کاربر الزامی است" });
+    }
+
+    // دریافت اطلاعات کاربر
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+    const user = await User.findById(userObjectId).select("-password").lean();
+    if (!user) {
+      return res.status(404).json({ success: false, message: "کاربر یافت نشد" });
+    }
+
+    // جمع‌آوری داده‌ها
+    const [pageViews, auditLogs, cookieAudits, favorites, comments, reactions] = await Promise.all([
+      PageView.find({ userId: userObjectId }).sort({ createdAt: -1 }).limit(200).lean(),
+      AuditLog.find({ user: userObjectId }).sort({ createdAt: -1 }).limit(200).lean(),
+      CookieAudit.find({ userId: userObjectId }).sort({ createdAt: -1 }).limit(100).lean(),
+      Favorite.find({ userId: userObjectId }).populate("adId", "title price city").lean(),
+      Comment.find({ userId: userObjectId }).populate("adId", "title").lean(),
+      Reaction.find({ userId: userObjectId }).lean(),
+    ]);
+
+    const stats = {
+      totalPageViews: pageViews.length,
+      totalAuditLogs: auditLogs.length,
+      totalCookieAudits: cookieAudits.length,
+      totalFavorites: favorites.length,
+      totalComments: comments.length,
+      totalReactions: reactions.length,
+      firstActivity: pageViews[pageViews.length - 1]?.createdAt || user.createdAt,
+      lastActivity: pageViews[0]?.createdAt || user.lastLogin || user.createdAt,
+    };
+
+    const report = {
+      user: {
+        _id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone,
+        email: user.email,
+        role: user.role,
+        city: user.city,
+        province: user.province,
+        district: user.district,
+        nationalCode: user.nationalCode,
+        isVerified: user.isVerified,
+        isBanned: user.isBanned,
+        createdAt: user.createdAt,
+        lastLogin: user.lastLogin,
+        ip: (user as any).ip || "نامشخص",
+      },
+      stats,
+      pageViews: pageViews.slice(0, 100),
+      auditLogs: auditLogs.slice(0, 100),
+      cookieAudits: cookieAudits.slice(0, 50),
+      favorites: favorites.map((f) => ({ _id: f._id, ad: f.adId, createdAt: f.createdAt })),
+      comments: comments.slice(0, 30),
+      reactions: reactions.slice(0, 30),
+      searchBehavior: pageViews.filter(p => p.path?.includes("/search") || p.path?.includes("/ad")).slice(0, 20),
+      generatedAt: new Date().toISOString(),
+    };
+
+    // ایمپورت توابع تبدیل (اصلاح: استفاده از as any)
+    const formatters = await import("../utils/reportFormatters") as any;
+    const { convertToCSV, convertToTXT, generatePDFReport } = formatters;
+
+    let fileBuffer: any;
+    let contentType: string;
+    let filename: string;
+
+    switch (format) {
+      case "json":
+        fileBuffer = Buffer.from(JSON.stringify(report, null, 2), "utf-8");
+        contentType = "application/json";
+        filename = `behavior-report-${userId}.json`;
+        break;
+
+      case "csv":
+        const csv = convertToCSV(report);
+        fileBuffer = Buffer.from(csv, "utf-8");
+        contentType = "text/csv";
+        filename = `behavior-report-${userId}.csv`;
+        break;
+
+      case "txt":
+        const txt = convertToTXT(report);
+        fileBuffer = Buffer.from(txt, "utf-8");
+        contentType = "text/plain";
+        filename = `behavior-report-${userId}.txt`;
+        break;
+
+      case "pdf":
+        const pdfBuffer = await generatePDFReport(report);
+        fileBuffer = pdfBuffer;
+        contentType = "application/pdf";
+        filename = `behavior-report-${userId}.pdf`;
+        break;
+
+      default:
+        return res.status(400).json({ success: false, message: "فرمت نامعتبر است" });
+    }
+
+    // لاگ عملیات
+    await createAuditLog({
+      userId: req.user?._id.toString(),
+      action: AuditAction.SYSTEM,
+      resource: "UserBehaviorReport",
+      resourceId: userId,
+      description: `سوپرادمین ${req.user?.firstName || req.user?.phone} گزارش رفتار کاربر ${user.phone} را با فرمت ${format.toUpperCase()} دانلود کرد.`,
+      req,
+    });
+
+    console.log(`✅ Report generated - Size: ${fileBuffer.length} bytes, Format: ${format}`);
+    
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(fileBuffer);
+  } catch (error) {
+    console.error("❌ Download report error:", error);
+    res.status(500).json({ success: false, message: "خطا در دانلود گزارش" });
   }
 };

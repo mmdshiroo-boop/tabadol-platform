@@ -512,3 +512,45 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+
+/* در globals.css، مطمئن شوید این بخش وجود دارد: */
+.leaflet-container {
+  z-index: 1 !important;
+}
+.leaflet-pane {
+  z-index: 1 !important;
+}
+.leaflet-control {
+  z-index: 10 !important;
+}
+.leaflet-control-attribution {
+  display: none !important;
+}
+
+.custom-popup .leaflet-popup-content-wrapper {
+  border-radius: 16px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  box-shadow: var(--shadow-xl) !important;
+  background: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+}
+
+.custom-popup .leaflet-popup-content {
+  margin: 0 !important;
+  width: 280px !important;
+}
+
+.custom-popup .leaflet-popup-tip {
+  background: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+}
+
+.custom-popup .leaflet-popup-close-button {
+  display: none !important;
+}
+
+.dark-blue-tiles {
+  filter: hue-rotate(180deg) saturate(0.6) brightness(0.8);
+}

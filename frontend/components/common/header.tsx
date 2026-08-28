@@ -77,6 +77,8 @@ import { NotificationBell } from "../notifcation/NotificationBell";
 import { Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { createPortal } from "react-dom";
+import apiClient from "@/services/api/client"; // ✅
+import { FollowListModal } from "../follow/FollowListModal";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api";
 
@@ -278,12 +280,22 @@ const superAdminMenuItems: MenuItem[] = [
   },
 ];
 
-// ═══════════════ UserMenu (کامل - بدون تغییر) ═══════════════
+// ═══════════════ UserMenu (کامل - با آمار فالو) ═══════════════
 export function UserMenu({ onLogout, customMenuItems }: UserMenuProps) {
   const router = useRouter();
   const { user, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [avatarKey, setAvatarKey] = useState(Date.now());
+
+  // 🆕 state های فالو
+  const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
+  const [followModal, setFollowModal] = useState<{ open: boolean; type: "followers" | "following" }>({
+    open: false,
+    type: "followers",
+  });
+
+  // محدودیت نمایش برای user, vip, agent
+  const shouldShowFollowStats = ["user", "vip", "agent"].includes(user?.role || "");
 
   useEffect(() => {
     const handleAvatarUpdate = () => setAvatarKey(Date.now());
@@ -295,6 +307,20 @@ export function UserMenu({ onLogout, customMenuItems }: UserMenuProps) {
   useEffect(() => {
     setAvatarKey(Date.now());
   }, [user]);
+
+  // دریافت آمار فالو
+  useEffect(() => {
+    if (!user?._id || !shouldShowFollowStats) return;
+    const fetchFollowCounts = async () => {
+      try {
+        const res = await apiClient.get(`/follow/counts/${user._id}`);
+        setFollowCounts(res.data.data);
+      } catch (error) {
+        console.error("Error fetching follow counts:", error);
+      }
+    };
+    fetchFollowCounts();
+  }, [user?._id, shouldShowFollowStats]);
 
   const handleLogout = () => {
     logout();
@@ -424,13 +450,13 @@ export function UserMenu({ onLogout, customMenuItems }: UserMenuProps) {
           className="relative h-9 w-9 rounded-full hover:bg-muted/60 transition-all duration-300"
         >
           <Avatar className="h-9 w-9 ring-2 ring-transparent hover:ring-primary/40 transition-all duration-300">
-  <AvatarImage
-    key={avatarKey}
-    src={avatarSrc || "/images/user.webp"}
-    className="object-cover"
-  />
-  <AvatarFallback className="bg-muted text-foreground font-black text-sm" />
-</Avatar>
+            <AvatarImage
+              key={avatarKey}
+              src={avatarSrc || "/images/user.webp"}
+              className="object-cover"
+            />
+            <AvatarFallback className="bg-muted text-foreground font-black text-sm" />
+          </Avatar>
         </Button>
       </DropdownMenuTrigger>
 
@@ -440,14 +466,14 @@ export function UserMenu({ onLogout, customMenuItems }: UserMenuProps) {
         sideOffset={10}
       >
         <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/40 border border-border/20 backdrop-blur-sm mb-2">
-        <Avatar className="w-14 h-14 ring-2 ring-primary/20 shadow-lg rounded-full shrink-0">
-  <AvatarImage
-    key={avatarKey}
-    src={avatarSrc || "/images/user.webp"}
-    className="object-cover"
-  />
-  <AvatarFallback />
-</Avatar>
+          <Avatar className="w-14 h-14 ring-2 ring-primary/20 shadow-lg rounded-full shrink-0">
+            <AvatarImage
+              key={avatarKey}
+              src={avatarSrc || "/images/user.webp"}
+              className="object-cover"
+            />
+            <AvatarFallback />
+          </Avatar>
 
           <div className="flex-1 min-w-0 text-right">
             <p className="font-black text-[13px] text-foreground tracking-tight truncate">
@@ -469,7 +495,29 @@ export function UserMenu({ onLogout, customMenuItems }: UserMenuProps) {
           </div>
         </div>
 
-        <DropdownMenuSeparator className="my-1.5 opacity-60" />
+        {/* 🆕 آمار فالوور/فالوینگ */}
+        {shouldShowFollowStats && (
+          <>
+            <div className="flex items-center gap-3 p-2 border-t border-border/40">
+              <button
+                onClick={() => setFollowModal({ open: true, type: "followers" })}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <span className="font-bold">{followCounts.followers}</span>
+                <span>فالوور</span>
+              </button>
+              <span className="text-muted-foreground/30">|</span>
+              <button
+                onClick={() => setFollowModal({ open: true, type: "following" })}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <span className="font-bold">{followCounts.following}</span>
+                <span>دنبال‌شونده</span>
+              </button>
+            </div>
+            <DropdownMenuSeparator className="my-1.5 opacity-60" />
+          </>
+        )}
 
         <DropdownMenuGroup>
           {menuItems.map((item, index) => {
@@ -505,6 +553,16 @@ export function UserMenu({ onLogout, customMenuItems }: UserMenuProps) {
           <span className="flex-1 text-right">خروج امن از حساب</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
+
+      {/* 🆕 مودال لیست فالوور/دنبال‌شونده */}
+      {user && shouldShowFollowStats && (
+        <FollowListModal
+          open={followModal.open}
+          onClose={() => setFollowModal({ ...followModal, open: false })}
+          userId={user._id}
+          type={followModal.type}
+        />
+      )}
     </DropdownMenu>
   );
 }
@@ -581,19 +639,19 @@ function MainNavMenu() {
         {user ? (
           <div className="flex items-center gap-3 p-3 bg-muted/40 rounded-xl mb-3">
             <Avatar className="w-10 h-10 ring-2 ring-primary/30 rounded-full">
-  <AvatarImage
-    src={
-      user.avatar
-        ? user.avatar.startsWith("http")
-          ? user.avatar
-          : `${API_BASE.replace("/api", "")}${user.avatar}`
-        : "/images/user.webp"
-    }
-    alt={user.firstName}
-    className="object-cover"
-  />
-  <AvatarFallback />
-</Avatar>
+              <AvatarImage
+                src={
+                  user.avatar
+                    ? user.avatar.startsWith("http")
+                      ? user.avatar
+                      : `${API_BASE.replace("/api", "")}${user.avatar}`
+                    : "/images/user.webp"
+                }
+                alt={user.firstName}
+                className="object-cover"
+              />
+              <AvatarFallback />
+            </Avatar>
             <div className="text-right text-sm font-bold truncate">
               {user.firstName} {user.lastName}
               <p className="text-xs text-muted-foreground font-mono">{user.phone}</p>
@@ -733,7 +791,6 @@ export function MainLinksSheet() {
     <AnimatePresence>
       {open && (
         <>
-          {/* Overlay */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -742,8 +799,6 @@ export function MainLinksSheet() {
             className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm"
             onClick={() => setOpen(false)}
           />
-
-          {/* Sheet */}
           <motion.div
             initial={{ x: 300, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
@@ -751,14 +806,19 @@ export function MainLinksSheet() {
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
             className="fixed inset-y-0 right-0 z-[110] h-full w-[290px] sm:w-[320px] bg-card text-foreground shadow-2xl border-l border-border flex flex-col"
           >
-            {/* هدر */}
             <div className="p-4 border-b border-border flex items-center justify-between">
-              <Link href="/" onClick={() => setOpen(false)}>
+              <Link href="/" onClick={() => setOpen(false)} className="flex flex-col items-start">
                 <img
-                  src="/log.png"
-                  alt="لوگو"
-                  className="h-10 sm:h-12 w-auto object-contain"
+                  src="/images/tabadol-logo-light.PNG"
+                  alt="تبادل"
+                  className="h-12 w-auto object-contain dark:hidden"
                 />
+                <img
+                  src="/images/tabadol-logo-dark.PNG"
+                  alt="تبادل"
+                  className="h-12 w-auto object-contain hidden dark:block"
+                />
+                <span className="text-[10px] font-bold text-muted-foreground mt-1">پلتفرم آگهی تبادل</span>
               </Link>
               <Button
                 variant="ghost"
@@ -770,23 +830,22 @@ export function MainLinksSheet() {
               </Button>
             </div>
 
-            {/* پروفایل */}
             {user ? (
               <div className="flex items-center gap-3 p-4 bg-muted/30 border-b border-border">
-              <Avatar className="w-10 h-10 ring-2 ring-primary/30 rounded-full">
-  <AvatarImage
-    src={
-      user.avatar
-        ? user.avatar.startsWith("http")
-          ? user.avatar
-          : `${API_BASE.replace("/api", "")}${user.avatar}`
-        : "/images/user.webp"
-    }
-    alt={user.firstName}
-    className="object-cover"
-  />
-  <AvatarFallback />
-</Avatar>
+                <Avatar className="w-10 h-10 ring-2 ring-primary/30 rounded-full">
+                  <AvatarImage
+                    src={
+                      user.avatar
+                        ? user.avatar.startsWith("http")
+                          ? user.avatar
+                          : `${API_BASE.replace("/api", "")}${user.avatar}`
+                        : "/images/user.webp"
+                    }
+                    alt={user.firstName}
+                    className="object-cover"
+                  />
+                  <AvatarFallback />
+                </Avatar>
                 <div className="text-right">
                   <p className="text-sm font-bold truncate">
                     {user.firstName} {user.lastName}
@@ -806,7 +865,6 @@ export function MainLinksSheet() {
               </div>
             )}
 
-            {/* لینک‌ها */}
             <div className="flex-1 overflow-y-auto p-3 space-y-1">
               <p className="text-[10px] font-black text-muted-foreground/70 px-3 py-1.5 uppercase tracking-wider">
                 صفحات اصلی
@@ -844,7 +902,6 @@ export function MainLinksSheet() {
               </motion.div>
             </div>
 
-            {/* فوتر */}
             {user && (
               <div className="p-3 border-t border-border bg-muted/20">
                 <Button
@@ -873,8 +930,6 @@ export function MainLinksSheet() {
       >
         <Menu className="h-5 w-5" />
       </Button>
-
-      {/* پورتال: رندر مستقیم در body برای جلوگیری از تداخل z-index */}
       {mounted && createPortal(sheetContent, document.body)}
     </>
   );
@@ -892,142 +947,96 @@ export function Header() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // تابع برای نمایش لوگو + متن زیر آن با اندازه‌های واکنش‌گرا
+  const renderLogo = (
+    logoSize: string,
+    scrolledLogoSize: string,
+    textSize: string,
+    showText: boolean = true,
+  ) => (
+    <Link href="/" className="flex flex-col items-center shrink-0">
+      <img
+        src="/images/tabadol-logo-light.PNG"
+        alt="تبادل"
+        className={`${isScrolled ? scrolledLogoSize : logoSize} w-auto object-contain drop-shadow-md dark:hidden transition-all duration-300`}
+      />
+      <img
+        src="/images/tabadol-logo-dark.PNG"
+        alt="تبادل"
+        className={`${isScrolled ? scrolledLogoSize : logoSize} w-auto object-contain drop-shadow-md hidden dark:block transition-all duration-300`}
+      />
+      {showText && (
+        <span className={`${textSize} font-bold text-muted-foreground dark:text-foreground/80 mt-0.5 ${isScrolled ? "hidden" : ""}`}>
+          پلتفرم آگهی تبادل
+        </span>
+      )}
+    </Link>
+  );
+
   return (
     <header
       className={cn(
         "sticky top-0 z-50 w-full transition-all duration-300 border-b bg-card/90 backdrop-blur-md",
         isScrolled
-          ? "h-16 bg-background/95 backdrop-blur-md shadow-sm border-border/60"
-          : "h-20 md:h-[72px] bg-background/80 backdrop-blur-sm border-border/40"
+          ? "h-14 md:h-16 bg-background/95 backdrop-blur-md shadow-sm border-border/60"
+          : "h-16 md:h-20 lg:h-24 bg-background/80 backdrop-blur-sm border-border/40",
       )}
       dir="rtl"
     >
       <div className="w-full max-w-[1400px] mx-auto h-full px-4 md:px-6 lg:px-8 flex items-center">
-
-        {/* ═══════════════════════════════════════
-            دسکتاپ (lg و بالاتر — ≥1024px)
-           ═══════════════════════════════════════ */}
-        <div className="hidden lg:flex items-center justify-between w-full gap-8">
-          {/* لوگو */}
-          <Link href="/" className="flex items-center shrink-0">
-            <img
-              src="/log.png"
-              alt="هویج"
-              className="h-14 w-auto object-contain"
-            />
-          </Link>
-
-          {/* سرچ‌باکس */}
+        {/* دسکتاپ */}
+        <div className="hidden lg:flex items-center justify-between w-full gap-6">
+          {/* لوگو سمت راست با متن زیر — در حالت اسکرول‌شده کوچک‌تر می‌شود */}
+          {renderLogo("h-16", "h-10", "text-[10px]")}
           <div className="flex-1 max-w-xl mx-auto w-full">
             <Suspense fallback={null}>
               <SearchBox className="w-full" />
             </Suspense>
           </div>
-
-          {/* اکشن‌ها */}
           <div className="flex items-center gap-2 shrink-0">
-            <Button
-              variant="ghost"
-              className="rounded-xl h-9 px-3 gap-2 text-xs font-bold text-foreground/80 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-all"
-              onClick={() => router.push("/chat")}
-            >
+            <Button variant="ghost" className="rounded-xl h-9 px-3 gap-2 text-xs font-bold text-foreground/80 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-all" onClick={() => router.push("/chat")}>
               <MessageCircle className="h-[18px] w-[18px] text-orange-500 dark:text-orange-400" />
               پیام‌ها
             </Button>
-
-            <Button
-              variant="ghost"
-              className="rounded-xl h-9 px-3 gap-2 text-xs font-bold text-foreground/80 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-all"
-              onClick={() =>
-                router.push(`/panel/${user?.role || "user"}/bookmarks`)
-              }
-            >
+            <Button variant="ghost" className="rounded-xl h-9 px-3 gap-2 text-xs font-bold text-foreground/80 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-all" onClick={() => router.push(`/panel/${user?.role || "user"}/bookmarks`)}>
               <Bookmark className="h-[18px] w-[18px] text-orange-500 dark:text-orange-400" />
               ذخیره‌شده‌ها
             </Button>
-
-            <Button
-              variant="ghost"
-              className="rounded-xl h-9 px-3 gap-2 text-xs font-bold text-foreground/80 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-all"
-              onClick={() => router.push("/pricing")}
-            >
+            <Button variant="ghost" className="rounded-xl h-9 px-3 gap-2 text-xs font-bold text-foreground/80 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-all" onClick={() => router.push("/pricing")}>
               <Gem className="h-[17px] w-[17px] text-orange-500 dark:text-orange-400" />
               اشتراک VIP
             </Button>
-
             <ThemeToggle />
             <NotificationBell />
-
-            <Button
-              className="gap-2 rounded-xl h-9 px-4 text-xs font-bold bg-orange-500 hover:bg-orange-600 dark:bg-orange-600 dark:hover:bg-orange-500 text-white shadow-md shadow-orange-500/15 hover:shadow-orange-500/25 transition-all"
-              onClick={() => router.push(user ? "/create-ad" : "/auth")}
-            >
+            <Button className="gap-2 rounded-xl h-9 px-4 text-xs font-bold bg-orange-500 hover:bg-orange-600 dark:bg-orange-600 dark:hover:bg-orange-500 text-white shadow-md shadow-orange-500/15 hover:shadow-orange-500/25 transition-all" onClick={() => router.push(user ? "/create-ad" : "/auth")}>
               <PlusCircle className="h-4 w-4" />
               ثبت آگهی
             </Button>
-
             <UserMenu />
           </div>
         </div>
 
-        {/* ═══════════════════════════════════════
-            تبلت (md تا lg — ≥768px و <1024px)
-           ═══════════════════════════════════════ */}
+        {/* تبلت */}
         <div className="hidden md:flex lg:hidden items-center w-full gap-4">
-          {/* ردیف بالا — لوگو + سرچ + اکشن‌ها */}
           <div className="flex items-center w-full gap-4">
-            {/* منوی همبرگری */}
             <MainLinksSheet />
-
-            {/* لوگو — بزرگ‌تر از موبایل */}
-            <Link href="/" className="flex items-center shrink-0">
-              <img
-                src="/log.png"
-                alt="هویج"
-                className="h-12 w-auto object-contain"
-              />
-            </Link>
-
-            {/* سرچ‌باکس — بزرگ‌تر و وسط */}
+            {renderLogo("h-12", "h-8", "text-[9px]")}
             <div className="flex-1 max-w-md mx-auto">
               <Suspense fallback={null}>
                 <SearchBox className="w-full" />
               </Suspense>
             </div>
-
-            {/* اکشن‌های تبلت */}
             <div className="flex items-center gap-1.5 shrink-0">
-              {/* دکمه چت — فقط آیکون در تبلت */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 rounded-xl hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-all"
-                onClick={() => router.push("/chat")}
-              >
+              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-all" onClick={() => router.push("/chat")}>
                 <MessageCircle className="h-[18px] w-[18px] text-orange-500 dark:text-orange-400" />
               </Button>
-
-              {/* دکمه ذخیره‌شده‌ها */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 rounded-xl hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-all"
-                onClick={() =>
-                  router.push(`/panel/${user?.role || "user"}/bookmarks`)
-                }
-              >
+              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-all" onClick={() => router.push(`/panel/${user?.role || "user"}/bookmarks`)}>
                 <Bookmark className="h-[18px] w-[18px] text-orange-500 dark:text-orange-400" />
               </Button>
-
-              {/* ثبت آگهی — دکمه کوچک‌تر */}
-              <Button
-                className="gap-1.5 rounded-xl h-9 px-3 text-xs font-bold bg-orange-500 hover:bg-orange-600 dark:bg-orange-600 dark:hover:bg-orange-500 text-white shadow-md shadow-orange-500/15 hover:shadow-orange-500/25 transition-all"
-                onClick={() => router.push(user ? "/create-ad" : "/auth")}
-              >
+              <Button className="gap-1.5 rounded-xl h-9 px-3 text-xs font-bold bg-orange-500 hover:bg-orange-600 dark:bg-orange-600 dark:hover:bg-orange-500 text-white shadow-md shadow-orange-500/15 hover:shadow-orange-500/25 transition-all" onClick={() => router.push(user ? "/create-ad" : "/auth")}>
                 <PlusCircle className="h-4 w-4" />
                 ثبت آگهی
               </Button>
-
               <NotificationBell />
               <ThemeToggle />
               <UserMenu />
@@ -1035,30 +1044,17 @@ export function Header() {
           </div>
         </div>
 
-        {/* ═══════════════════════════════════════
-            موبایل (<768px)
-           ═══════════════════════════════════════ */}
+        {/* موبایل */}
         <div className="flex md:hidden items-center justify-between w-full gap-2">
-          {/* سمت راست — منو + لوگو */}
           <div className="flex items-center gap-1.5">
             <MainLinksSheet />
-            <Link href="/" className="flex items-center shrink-0">
-              <img
-                src="/log.png"
-                alt="هویج"
-                className="h-9 w-auto object-contain"
-              />
-            </Link>
+            {renderLogo("h-10", "h-8", "text-[9px]", false)}
           </div>
-
-          {/* وسط — سرچ‌باکس */}
           <div className="flex-1 mx-1.5">
             <Suspense fallback={null}>
               <SearchBox className="w-full" />
             </Suspense>
           </div>
-
-          {/* سمت چپ — اکشن‌ها */}
           <div className="flex items-center gap-1 shrink-0">
             <NotificationBell />
             <ThemeToggle />

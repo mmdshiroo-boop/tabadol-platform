@@ -3,8 +3,8 @@
 
 import { AuthProvider, useAuth } from "@/app/context/AuthContext";
 import { ThemeProvider } from "./theme-provider";
-import { useBrowseGate } from "@/hooks/useBrowseGate";
 import { RegistrationWall } from "@/components/ui/RegistrationWall";
+import { useBrowseGate } from "@/hooks/useBrowseGate";
 
 function Providers({ children }: { children: React.ReactNode }) {
   return (

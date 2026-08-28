@@ -1,3 +1,4 @@
+// help/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -78,7 +79,7 @@ export default function HelpPage() {
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    document.title = `راهنما | ${settings.siteName || "پلتفرم آگهی هویج"}`;
+    document.title = `راهنما | ${settings.siteName || "پلتفرم آگهی تبادل"}`;
   }, [settings.siteName]);
 
   const filteredFaqs =

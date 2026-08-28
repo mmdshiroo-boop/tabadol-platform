@@ -8,7 +8,8 @@ import multer from "multer";
 import path from "node:path";
 import fs from "fs";
 import sharp from "sharp";
-
+import { grantPoints, grantPointsIfNotGranted } from "../services/loyalty.service";
+import { LOYALTY_RULES } from "../config/loyalty";
 import {
   sendNotificationToUser,
   notifyAdmins,
@@ -19,8 +20,9 @@ import { WebhookService } from "../services/webhook.service";
 import { createAuditLog } from "../services/auditLog.service";
 import { AuditAction } from "../models/AuditLog.model";
 import { NotificationType } from "../models/Notification.model";
-
-
+import { PageView } from "../models/PageView.model";
+import { Agent } from "../models/Agent.model";
+import { recordView } from "../services/agentClub.service";
 // ==================== تنظیمات آپلود ====================
 const uploadDir = path.join(process.cwd(), "uploads");
 const adsUploadDir = path.join(uploadDir, "ads");
@@ -48,11 +50,13 @@ const fileFilter = (req: any, file: any, cb: any) => {
   }
 };
 
+
 const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter,
 });
+
 
 // ==================== آپلود تصویر با واترمارک ====================
 export const uploadImageWithWatermark = async (
@@ -103,21 +107,24 @@ export const uploadImageWithWatermark = async (
     const watermarkPath = path.join(__dirname, "../../assets/watermark.png");
 
     if (!fs.existsSync(watermarkPath)) {
+      // اگر فایل واترمارک موجود نبود، تصویر را بدون واترمارک ذخیره کن
       await file.mv(filePath);
     } else {
       const imageBuffer = file.data;
-      const metadata = await sharp(imageBuffer).metadata();
-      const width = metadata.width || 800;
-      const height = metadata.height || 600;
-      const watermarkWidth = Math.max(80, Math.floor(width * 0.15));
-      const watermarkBuffer = await sharp(watermarkPath)
-        .resize(watermarkWidth)
-        .ensureAlpha(0.4)
+
+      // ۱) ریسایز تصویر اصلی به عرض ۱۰۲۴ پیکسل (مانند بارگذاری فله‌ای)
+      const resizedImageBuffer = await sharp(imageBuffer)
+        .resize(1024, undefined, { fit: "inside", withoutEnlargement: true })
         .toBuffer();
-      const left = width - watermarkWidth - 20;
-      const top = height - Math.floor(watermarkWidth * 0.5) - 20;
-      await sharp(imageBuffer)
-        .composite([{ input: watermarkBuffer, top, left }])
+
+      // ۲) آماده‌سازی واترمارک با ابعاد ثابت ۲۰۰×۲۰۰ (حفظ نسبت ابعاد)
+      const watermarkBuffer = await sharp(watermarkPath)
+    .resize(120, 120, { fit: "inside", withoutEnlargement: true })
+  .toBuffer();
+
+      // ۳) کامپوزیت واترمارک در پایین سمت چپ (southwest)
+      await sharp(resizedImageBuffer)
+        .composite([{ input: watermarkBuffer, gravity: "southwest" }])
         .toFile(filePath);
     }
 
@@ -135,6 +142,7 @@ export const uploadImageWithWatermark = async (
     res.status(500).json({ success: false, message: "خطا در آپلود تصویر" });
   }
 };
+
 
 export const getAds = async (req: Request, res: Response) => {
   try {
@@ -232,31 +240,46 @@ export const getAds = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, message: "خطا در دریافت آگهی‌ها" });
   }
 };
+
+
 // ==================== دریافت لیست آگهی‌ها ====================
 export const getAdById = async (req: AuthRequest, res: Response) => {
   try {
     const id = String(req.params.id);
 
-    // ۱. اول آگهی رو بگیر (بدون افزایش بازدید)
     const ad = await Ad.findById(id)
-      .populate("category", "name slug")
-      .populate("userId", "firstName lastName phone isVerified role")
-      .lean();
-
+  .populate("category", "name slug")
+  .populate("userId", "firstName lastName phone isVerified role avatar") // ✅
+  .lean();
     if (!ad) {
       return res.status(404).json({ success: false, message: "آگهی یافت نشد" });
     }
 
-    // ۲. ⬅️ همـــین‌جــــا مالک رو تشخیص بده
     const ownerId = (ad.userId as any)?._id || ad.userId;
     const isOwner = req.user && ownerId?.toString() === req.user._id.toString();
 
-    // ۳. فقط اگه کاربر فعلی مالک نبود، بازدید رو زیاد کن
     if (!isOwner) {
       await Ad.findByIdAndUpdate(id, { $inc: { views: 1 } });
     }
 
-    // ۴. پاسخ رو بفرست
+    // ⬇️ ثبت PageView برای تحلیل رفتار
+    const userId = req.user?._id || null;
+    await PageView.create({
+      userId,
+      sessionId: req.sessionId || req.cookies?.sessionId || null,
+      path: `/ad/${id}`,
+      referrer: req.headers.referer || "",
+      ip: req.ip || req.socket.remoteAddress || "unknown",
+      userAgent: req.headers["user-agent"] || "",
+    });
+// ⬇️ ثبت بازدید باشگاه مشاور
+if (!isOwner && req.user) {
+  const ownerId = (ad.userId as any)?._id || ad.userId;
+  const ownerAgent = await Agent.findOne({ userId: ownerId });
+  if (ownerAgent) {
+    await recordView(ownerAgent._id.toString(), req.user._id.toString());
+  }
+}
     res.json({
       success: true,
       data: {
@@ -268,6 +291,8 @@ export const getAdById = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ success: false, message: "خطای سرور" });
   }
 };
+
+
 // ==================== ثبت آگهی جدید ====================
 export const createAd = async (req: AuthRequest, res: Response) => {
   try {
@@ -375,6 +400,15 @@ export const createAd = async (req: AuthRequest, res: Response) => {
     const ad = new Ad(adData);
     await ad.save();
 
+    // 🆕 اعطای امتیاز ثبت آگهی
+    await grantPoints(
+      userId.toString(),
+      LOYALTY_RULES.CREATE_AD,
+      "create_ad",
+      "ایجاد آگهی",
+      { adId: ad._id.toString() }
+    );
+
     await createAuditLog({
       userId: req.user?._id?.toString(),
       action: AuditAction.AD_CREATED,
@@ -458,7 +492,6 @@ export const createAd = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ success: false, message: "خطا در ایجاد آگهی" });
   }
 };
-
 // ==================== آپلود تصویر ====================
 export const uploadImage = async (req: AuthRequest, res: Response) => {
   try {
@@ -512,9 +545,9 @@ export const uploadImage = async (req: AuthRequest, res: Response) => {
       const imageMetadata = await sharp(file.data).metadata();
       const imgWidth = imageMetadata.width || 800;
       const wmWidth = Math.min(500, Math.max(150, Math.floor(imgWidth * 0.35)));
-      const resizedWm = await sharp(watermarkPath)
-        .resize(wmWidth, null, { fit: "inside", withoutEnlargement: true })
-        .toBuffer();
+    const resizedWm = await sharp(watermarkPath)
+  .resize(120, 120, { fit: "inside", withoutEnlargement: true })
+  .toBuffer();
       const finalBuffer = await sharp(file.data)
         .composite([{ input: resizedWm, gravity: "southwest" }])
         .toBuffer();
@@ -2537,5 +2570,34 @@ export const getSpecialAdsForAdmin = async (
     res
       .status(500)
       .json({ success: false, message: "خطا در دریافت آگهی‌های ویژه" });
+  }
+};
+// ==================== اشتراک‌گذاری آگهی ====================
+export const shareAd = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?._id;
+    const adId = String(req.params.id);
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "لطفاً وارد شوید" });
+    }
+
+    const ad = await Ad.findById(adId);
+    if (!ad) {
+      return res.status(404).json({ success: false, message: "آگهی یافت نشد" });
+    }
+
+    await grantPointsIfNotGranted(
+      userId.toString(),
+      LOYALTY_RULES.SHARE,
+      `share_${adId}`,
+      "اشتراک‌گذاری آگهی",
+      { adId }
+    );
+
+    res.json({ success: true, message: "امتیاز اشتراک‌گذاری ثبت شد" });
+  } catch (error) {
+    console.error("Share ad error:", error);
+    res.status(500).json({ success: false, message: "خطا در ثبت اشتراک‌گذاری" });
   }
 };

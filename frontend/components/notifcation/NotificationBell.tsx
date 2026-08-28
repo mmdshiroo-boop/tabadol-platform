@@ -8,8 +8,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Bell, BellDot, CheckCheck, Trash2, Zap } from "lucide-react";
-import { useNotifications } from "@/hooks/useNotifications";
-import { useSocketNotifications } from "@/hooks/useSocketNotifications";
 import { Notification } from "@/types";
 import { useState, useEffect } from "react";
 import {
@@ -17,6 +15,8 @@ import {
   getNotificationRolePath,
   normalizeNotificationLink,
 } from "@/lib/notification-utils";
+import { useSocketNotifications } from "@/hooks/useSocketNotifications";
+import { useNotifications } from "@/hooks/useNotifications";
 
 const TYPE_CONFIG: Record<string, { icon: string; color: string }> = {
   ad_submitted: { icon: "📋", color: "text-blue-500" },
@@ -24,6 +24,8 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string }> = {
   ad_rejected: { icon: "❌", color: "text-red-500" },
   ad_expired: { icon: "⏰", color: "text-orange-500" },
   new_message: { icon: "💬", color: "text-purple-500" },
+  loyalty_points_earned: { icon: "🎁", color: "text-purple-500" },
+  tier_upgrade: { icon: "🏆", color: "text-yellow-500" },
   vip_upgrade: { icon: "✨", color: "text-yellow-500" },
   property_submitted: { icon: "🏠", color: "text-blue-500" },
   property_approved: { icon: "✅", color: "text-green-500" },

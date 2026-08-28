@@ -1,3 +1,4 @@
+// index.ts
 import express from "express";
 import fs from "fs";
 import cors from "cors";
@@ -7,7 +8,7 @@ import http from "http";
 import cookieParser from "cookie-parser";
 import fileUpload from "express-fileupload";
 import swaggerUi from "swagger-ui-express";
-
+import { getPublicProfile } from "./controllers/user.controller";
 import { connectDB } from "./config/db";
 import { specs } from "./config/swagger";
 import { initSocket } from "./socket";
@@ -32,7 +33,6 @@ import locationRoutes from "./routes/location.routes";
 import locationMapRoutes from "./routes/locationMap.routes";
 import financialRoutes from "./routes/financial.routes";
 import agentRoutes from "./routes/agent.routes";
-import marketAnalysisRoutes from "./routes/marketAnalysis.routes";
 import marketRoutes from "./routes/market.routes";
 import conversationRoutes from "./routes/conversation.routes";
 import auditLogRoutes from "./routes/auditLog.routes";
@@ -57,7 +57,15 @@ import roleRoutes from "./routes/role.routes";
 import chatRouter from "./routes/chat.routes";
 import messageRouter from "./routes/message.routes";
 import watermarkRoutes from "./routes/watermark.routes";
-
+import loyaltyRoutes from "./routes/loyalty.routes";
+import adminLoyaltyRoutes from "./routes/adminLoyalty.routes";
+import verificationRoutes from "./routes/verification.routes";
+import rewardRoutes from "./routes/reward.routes";
+import followRoutes from "./routes/follow.routes";
+import adminRewardRoutes from "./routes/adminReward.routes";
+import agentClubRoutes from "./routes/agentClub.routes";
+import adminAgentClubRoutes from "./routes/adminAgentClub.routes";
+import superAdminAgentClubRoutes from "./routes/superAdminAgentClub.routes";
 dotenv.config();
 
 const app = express();
@@ -78,7 +86,7 @@ app.use(cookieParser());
 app.use(
   fileUpload({
     createParentPath: true,
-    limits: { fileSize: 200 * 1024 * 1024 }, // ۲۰۰ مگابایت
+    limits: { fileSize: 50 * 1024 * 1024 }, // ۵۰ مگابایت
     useTempFiles: false,
     abortOnLimit: true,
   }),
@@ -92,9 +100,8 @@ app.use(apiLogger); // لاگ کلی همه درخواست‌ها
 // ============================================================
 app.use("/api/public", publicRoutes);
 app.use("/api/auth", authRoutes);
-app.use("/api/market-analysis", marketAnalysisRoutes);
 app.use("/api/market", marketRoutes);
-app.use("/api/locations", locationRoutes);
+app.use("/api/locations", locationRoutes); // شامل استان‌ها، شهرها، IP و Reverse Geocode
 app.use("/api/categories", categoryRoutes);
 app.use("/api/ads", adRoutes);
 app.use("/api/page-view", pageViewRoutes);
@@ -102,10 +109,11 @@ app.use("/api/bot", botRoutes);
 app.use("/api", chatRouter);
 app.use("/api", messageRouter);
 
+// ایجاد درخواست مشاوره (عمومی یا نیمه‌خصوصی)
 app.post("/api/consulting", consultingRoutes);
 
 // ============================================================
-// مسیرهای محافظت‌شده
+// مسیرهای محافظت‌شده (نیاز به لاگین و احراز هویت - Protect)
 // ============================================================
 app.use("/api", protect);
 app.use(cookieAuditMiddleware);
@@ -132,8 +140,22 @@ app.use("/api/developer", developerRoutes);
 app.use("/api/graph", graphRoutes);
 app.use("/api/conversations", conversationRoutes);
 app.use("/api/watermark", watermarkRoutes);
-
+app.use("/api/loyalty", loyaltyRoutes);
+app.use("/api/admin/loyalty", adminLoyaltyRoutes);
+app.use("/api/verification", verificationRoutes);
+app.use("/api/rewards", rewardRoutes);
+app.use("/api/follow", followRoutes);
+app.use("/api/admin/rewards", adminRewardRoutes);
+app.get("/api/users/public/:id", getPublicProfile);
+app.use("/api/agent/club", agentClubRoutes); 
+app.use("/api/admin/agent-clubs", adminAgentClubRoutes);
+app.use("/api/super-admin/agent-clubs", superAdminAgentClubRoutes);
+// ============================================================
+// مسیرهای پنل ادمین و نقشه (همگام‌سازی شده با پیشوند /api/locations)
+// ============================================================
+// این بخش مشکل خطای 404 نقشه را به طور کامل برطرف می‌کند
 app.use("/api/locations", locationMapRoutes);
+
 app.use("/api/admin", adminRoutes);
 app.use("/api/super-admin/financial", financialRoutes);
 app.use("/api/super-admin", superAdminRoutes);
@@ -162,19 +184,6 @@ if (!fs.existsSync(uploadDir)) {
 app.use(errorHandler);
 
 // ============================================================
-// 🛡️ محافظت از سرور در برابر خطاهای کشنده (Uncaught)
-// ============================================================
-process.on('uncaughtException', (error) => {
-  console.error('💥 Uncaught Exception:', error);
-  // سرور را عمداً خاموش نمی‌کنیم
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('🔥 Unhandled Rejection at:', promise, 'reason:', reason);
-  // سرور را عمداً خاموش نمی‌کنیم
-});
-
-// ============================================================
 // راه‌اندازی سرور و اتصال به دیتابیس
 // ============================================================
 const PORT = parseInt(process.env.PORT || "5001", 10);
@@ -184,7 +193,7 @@ const startServer = async () => {
     await connectDB();
     console.log("✅ Database connected successfully.");
 
-    // 🟢 راه‌اندازی Worker پردازش فله‌ای
+    // 🟢 راه‌اندازی Worker پردازش فله‌ای (بعد از دیتابیس، قبل از سرور)
     startBulkWorker();
     console.log("🔄 Bulk worker started in background.");
 

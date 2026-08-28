@@ -1,4 +1,3 @@
-// components/filters/MarketAdvancedFilter.tsx
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
@@ -17,20 +16,24 @@ import {
   Building,
   Sparkles,
 } from "lucide-react";
-
 import { useMarketAdvancedFilter } from "@/hooks/useMarketAdvancedFilter";
 import apiClient from "@/services/api/client";
-
 import {
   MarketFilterValues,
   BUILDING_AGE_OPTIONS,
   PRICE_RANGE_OPTIONS,
   PROPERTY_TYPE_OPTIONS,
+  RENT_DEPOSIT_RANGE_OPTIONS,
+  RENT_MONTHLY_RANGE_OPTIONS,
   ROOMS_COUNT_OPTIONS,
   SIZE_RANGE_OPTIONS,
 } from "./marketFilter.types";
-
-// ⚠️ دیگر PROVINCE_NAMES را import نمی‌کنیم
+import { IranLocationSelector, SelectedLocation } from "@/components/ui/IranLocationSelector"; // ✅
+import {
+  findProvinceByName,
+  findCountyByName,
+  getById,
+} from "@/lib/iranDivisions"; // ✅
 
 // ── Helper Components ──────────────────────────
 
@@ -123,44 +126,14 @@ export function MarketAdvancedFilter({
     clearAllFilters,
   } = useMarketAdvancedFilter({ initialValues, onApply });
 
-  // گزینه‌های پویا
-  const [provinceOptions, setProvinceOptions] = useState<
-    { value: string; label: string }[]
-  >([{ value: "", label: "همه استان‌ها" }]);
-
-  const [cityOptions, setCityOptions] = useState<
-    { value: string; label: string }[]
-  >([]);
-
   const [regionOptions, setRegionOptions] = useState<
     { value: string; label: string }[]
   >([]);
 
-  const [districtOptions, setDistrictOptions] = useState<
-    { value: string; label: string }[]
-  >([]);
+  // 🆕 state برای انتخاب استان/شهر/منطقه
+  const [selectedLocation, setSelectedLocation] = useState<SelectedLocation>({});
 
-  const [loadingCities, setLoadingCities] = useState(false);
-
-  // ── دریافت استان‌ها از API (جایگزین PROVINCE_NAMES) ──
-  useEffect(() => {
-    apiClient
-      .get("/market/neshan-provinces")
-      .then((res) => {
-        if (res.data?.success && Array.isArray(res.data.data)) {
-          const options = [{ value: "", label: "همه استان‌ها" }];
-          res.data.data.forEach((p: any) => {
-            options.push({ value: p.name, label: p.name });
-          });
-          setProvinceOptions(options);
-        }
-      })
-      .catch(() => {
-        // در صورت خطا، لیست ثابت می‌تواند fallback شود (اما الزامی نیست)
-      });
-  }, []);
-
-  // ── دریافت مناطق ──
+  // دریافت مناطق (region) از API – این بخش جدا از استان/شهر است
   useEffect(() => {
     apiClient
       .get("/market/regions")
@@ -178,106 +151,75 @@ export function MarketAdvancedFilter({
       .catch(() => {});
   }, []);
 
-  // ── دریافت شهرها با تغییر استان ──
-  const fetchCities = useCallback(
-    async (provinceName: string) => {
-      if (!provinceName || provinceName === "همه استان‌ها") {
-        setCityOptions([]);
-        updateFilter("city", "");
-        return;
-      }
-      setLoadingCities(true);
-      try {
-        const res = await apiClient.get("/market/neshan-cities-list", {
-          params: { province: provinceName },
-        });
-        if (res.data?.success) {
-          const cities = res.data.data.map((c: any) => ({
-            value: c.name,
-            label: c.name,
-          }));
-          setCityOptions(cities);
-
-          // انتخاب خودکار اولین شهر در صورت عدم تطابق
-          if (
-            cities.length > 0 &&
-            (!filters.city ||
-              !cities.find(
-                (c: { value: string; label: string }) =>
-                  c.value === filters.city,
-              ))
-          ) {
-            updateFilter("city", cities[0].value);
+  // همگام‌سازی initialValues با selectedLocation
+  useEffect(() => {
+    if (initialValues?.province) {
+      const prov = findProvinceByName(initialValues.province);
+      if (prov) {
+        setSelectedLocation((prev) => ({
+          ...prev,
+          provinceId: prov.Id,
+        }));
+        if (initialValues.city) {
+          const county = findCountyByName(prov.Id, initialValues.city);
+          if (county) {
+            setSelectedLocation((prev) => ({
+              ...prev,
+              provinceId: prov.Id,
+              countyId: county.Id,
+            }));
           }
         }
-      } catch (e) {
-        console.error("Failed to fetch cities", e);
-      } finally {
-        setLoadingCities(false);
       }
-    },
-    [filters.city, updateFilter],
-  );
+    }
+  }, [initialValues?.province, initialValues?.city]);
 
-  // ── دریافت محله‌ها با تغییر شهر ──
-  const fetchDistricts = useCallback(
-    async (cityName: string) => {
-      if (!cityName) {
-        setDistrictOptions([{ value: "none", label: "همه محله‌ها" }]);
-        updateFilter("district", "none");
-        return;
-      }
-      try {
-        const res = await apiClient.get("/market/neshan-districts-list", {
-          params: { city: cityName },
-        });
-        if (res.data?.success) {
-          const districts = res.data.data
-            .filter((d: any) => d.name && d.name !== "همه محله‌ها")
-            .map((d: any) => ({ value: d.name, label: d.name }));
-          setDistrictOptions([
-            { value: "none", label: "همه محله‌ها" },
-            ...districts,
-          ]);
-          if (!districts.find((d: any) => d.value === filters.district)) {
-            updateFilter("district", "none");
-          }
-        }
-      } catch (e) {
-        console.error("Failed to fetch districts", e);
-      }
-    },
-    [filters.district, updateFilter],
-  );
+  // 🆕 callback برای تغییر مکان از ایران‌سلکتور
+  const handleLocationChange = (location: SelectedLocation) => {
+    setSelectedLocation(location);
 
-  const handleProvinceChange = (province: string) => {
-    updateFilter("province", province);
-    updateFilter("city", "");
-    updateFilter("district", "none");
-    fetchCities(province);
+    // استخراج نام‌ها
+    let provinceName = "";
+    let cityName = "";
+    let districtName = "none";
+
+    if (location.provinceId) {
+      const prov = getById(location.provinceId);
+      provinceName = prov?.Name || "";
+    }
+    if (location.countyId) {
+      const county = getById(location.countyId);
+      cityName = county?.Name || "";
+    }
+    if (location.districtId) {
+      const district = getById(location.districtId);
+      districtName = district?.Name || "none";
+    }
+
+    updateFilter("province", provinceName);
+    updateFilter("city", cityName);
+    updateFilter("district", districtName);
   };
 
-  const handleCityChange = (city: string) => {
-    updateFilter("city", city);
-    updateFilter("district", "none");
-    fetchDistricts(city);
+  // مدیریت نوع معامله
+  const handleTradeTypeChange = (type: string) => {
+    if (filters.tradeType === type) {
+      updateFilter("tradeType", "");
+      updateFilter("priceRange", "none");
+      updateFilter("rentDepositRange", "none");
+      updateFilter("rentMonthlyRange", "none");
+    } else {
+      updateFilter("tradeType", type);
+      if (type === "rent") {
+        updateFilter("priceRange", "none");
+      } else if (type === "buy") {
+        updateFilter("rentDepositRange", "none");
+        updateFilter("rentMonthlyRange", "none");
+      }
+    }
   };
 
-  // دریافت اولیه شهرها و محله‌ها در صورت وجود مقدار پیش‌فرض
-  useEffect(() => {
-    if (filters.province) {
-      fetchCities(filters.province);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (filters.city) {
-      fetchDistricts(filters.city);
-    }
-  }, [filters.city, fetchDistricts]);
-
-  // Modal animation states
+  // انیمیشن مودال
   const [isVisible, setIsVisible] = useState(false);
   const [shouldMount, setShouldMount] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
@@ -312,15 +254,12 @@ export function MarketAdvancedFilter({
 
   const handleReset = () => {
     resetFilters();
+    setSelectedLocation({});
     onReset?.();
   };
 
   return (
-    <div
-      className={`inline-block ${className}`}
-      dir="rtl"
-      style={{ fontFamily: "Vazirmatn, system-ui, sans-serif" }}
-    >
+    <div className={`inline-block ${className}`} dir="rtl" style={{ fontFamily: "Vazirmatn, system-ui, sans-serif" }}>
       {/* Trigger Button */}
       <button
         type="button"
@@ -345,23 +284,15 @@ export function MarketAdvancedFilter({
           role="dialog"
           aria-modal="true"
         >
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
-            onClick={closeModal}
-          />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={closeModal} />
 
-          {/* Panel */}
           <div
             ref={modalRef}
             tabIndex={-1}
             className={`relative bg-white w-full sm:max-w-3xl rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[88vh] transition-all duration-300 ease-out ${
-              isVisible
-                ? "translate-y-0 sm:scale-100"
-                : "translate-y-10 sm:scale-95"
+              isVisible ? "translate-y-0 sm:scale-100" : "translate-y-10 sm:scale-95"
             }`}
           >
-            {/* Drag handle (mobile) */}
             <div className="flex justify-center pt-3 pb-1 sm:hidden">
               <div className="w-10 h-1 bg-gray-200 rounded-full" />
             </div>
@@ -373,9 +304,7 @@ export function MarketAdvancedFilter({
                   <Sparkles className="w-4 h-4 text-orange-500" />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-gray-900">
-                    فیلتر تحلیل بازار
-                  </h2>
+                  <h2 className="text-base font-bold text-gray-900">فیلتر تحلیل بازار</h2>
                   <p className="text-xs text-gray-400">جستجوی دقیق آمار مسکن</p>
                 </div>
               </div>
@@ -387,7 +316,7 @@ export function MarketAdvancedFilter({
               </button>
             </div>
 
-            {/* Active Tags Bar */}
+            {/* Active Tags */}
             {hasActiveFilters && (
               <div className="px-5 py-3 bg-orange-50/70 border-b border-orange-100 flex-shrink-0 flex items-center gap-2 flex-wrap">
                 <span className="text-xs text-gray-400 ml-1">فعال:</span>
@@ -418,21 +347,13 @@ export function MarketAdvancedFilter({
             <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-5 space-y-6">
               {/* Trade Type */}
               <section>
-                <SectionHeader
-                  icon={<Home className="w-3.5 h-3.5" />}
-                  title="نوع معامله"
-                />
+                <SectionHeader icon={<Home className="w-3.5 h-3.5" />} title="نوع معامله" />
                 <div className="flex gap-2">
                   {["buy", "rent"].map((type) => (
                     <button
                       key={type}
                       type="button"
-                      onClick={() =>
-                        updateFilter(
-                          "tradeType",
-                          filters.tradeType === type ? "" : type,
-                        )
-                      }
+                      onClick={() => handleTradeTypeChange(type)}
                       className={`px-4 py-2 text-sm font-medium rounded-xl border transition-all ${
                         filters.tradeType === type
                           ? "bg-orange-500 text-white border-orange-500 shadow-sm"
@@ -449,71 +370,29 @@ export function MarketAdvancedFilter({
 
               {/* Location */}
               <section>
-                <SectionHeader
-                  icon={<MapPin className="w-3.5 h-3.5" />}
-                  title="موقعیت"
+                <SectionHeader icon={<MapPin className="w-3.5 h-3.5" />} title="موقعیت" />
+                {/* 🆕 استفاده از کامپوننت استان/شهر/منطقه */}
+                <IranLocationSelector
+                  value={selectedLocation}
+                  onChange={handleLocationChange}
+                  className="mb-3"
+                  showOptionalDistrict={true}
                 />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <FilterSelect
-                    label="استان"
-                    value={filters.province}
-                    onChange={handleProvinceChange}
-                    options={provinceOptions}
-                    icon={<MapPin className="w-3.5 h-3.5 text-orange-500" />}
-                  />
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-gray-600 flex items-center gap-1">
-                      <Building className="w-3.5 h-3.5 text-orange-500" /> شهر
-                    </label>
-                    {loadingCities ? (
-                      <div className="h-9 bg-gray-100 rounded-xl animate-pulse" />
-                    ) : (
-                      <FilterSelect
-                        label=""
-                        value={filters.city}
-                        onChange={handleCityChange}
-                        options={
-                          cityOptions.length > 0
-                            ? cityOptions
-                            : [
-                                {
-                                  value: "",
-                                  label: "ابتدا استان را انتخاب کنید",
-                                },
-                              ]
-                        }
-                      />
-                    )}
-                  </div>
-                  <FilterSelect
-                    label="منطقه"
-                    value={filters.region}
-                    onChange={(v) => updateFilter("region", v)}
-                    options={
-                      regionOptions.length > 0
-                        ? regionOptions
-                        : [{ value: "همه", label: "همه مناطق" }]
-                    }
-                    icon={<MapPin className="w-3.5 h-3.5 text-orange-500" />}
-                  />
-                  <FilterSelect
-                    label="محله (تحلیل)"
-                    value={filters.district}
-                    onChange={(v) => updateFilter("district", v)}
-                    options={districtOptions}
-                    icon={<Grid3X3 className="w-3.5 h-3.5 text-orange-500" />}
-                  />
-                </div>
+                {/* منطقه (region) از API — مجزا از تقسیمات کشوری */}
+                <FilterSelect
+                  label="منطقه (منطقه‌بندی بازار)"
+                  value={filters.region}
+                  onChange={(v) => updateFilter("region", v)}
+                  options={regionOptions.length > 0 ? regionOptions : [{ value: "همه", label: "همه مناطق" }]}
+                  icon={<MapPin className="w-3.5 h-3.5 text-orange-500" />}
+                />
               </section>
 
               <div className="border-t border-gray-100" />
 
               {/* Property Features */}
               <section>
-                <SectionHeader
-                  icon={<Building className="w-3.5 h-3.5" />}
-                  title="ویژگی‌های ملک"
-                />
+                <SectionHeader icon={<Building className="w-3.5 h-3.5" />} title="ویژگی‌های ملک" />
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <FilterSelect
                     label="نوع ملک"
@@ -522,15 +401,36 @@ export function MarketAdvancedFilter({
                     options={PROPERTY_TYPE_OPTIONS}
                     icon={<Building className="w-3.5 h-3.5 text-orange-500" />}
                   />
-                  <FilterSelect
-                    label="بازه قیمت"
-                    value={filters.priceRange}
-                    onChange={(v) => updateFilter("priceRange", v)}
-                    options={PRICE_RANGE_OPTIONS}
-                    icon={
-                      <DollarSign className="w-3.5 h-3.5 text-orange-500" />
-                    }
-                  />
+
+                  {filters.tradeType !== "rent" && (
+                    <FilterSelect
+                      label="بازه قیمت"
+                      value={filters.priceRange}
+                      onChange={(v) => updateFilter("priceRange", v)}
+                      options={PRICE_RANGE_OPTIONS}
+                      icon={<DollarSign className="w-3.5 h-3.5 text-orange-500" />}
+                    />
+                  )}
+
+                  {filters.tradeType === "rent" && (
+                    <>
+                      <FilterSelect
+                        label="مبلغ رهن (ودیعه)"
+                        value={filters.rentDepositRange}
+                        onChange={(v) => updateFilter("rentDepositRange", v)}
+                        options={RENT_DEPOSIT_RANGE_OPTIONS}
+                        icon={<DollarSign className="w-3.5 h-3.5 text-orange-500" />}
+                      />
+                      <FilterSelect
+                        label="اجاره ماهانه"
+                        value={filters.rentMonthlyRange}
+                        onChange={(v) => updateFilter("rentMonthlyRange", v)}
+                        options={RENT_MONTHLY_RANGE_OPTIONS}
+                        icon={<DollarSign className="w-3.5 h-3.5 text-orange-500" />}
+                      />
+                    </>
+                  )}
+
                   <FilterSelect
                     label="متراژ"
                     value={filters.sizeRange}

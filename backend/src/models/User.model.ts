@@ -55,6 +55,16 @@ export interface IUser extends Document {
   createdAt: Date;
   updatedAt: Date;
   notificationSettings: INotificationSettings;
+
+  // 🆕 باشگاه مشتریان
+  loyaltyPoints: number;
+  referralCode: string;
+  referredBy?: Schema.Types.ObjectId | null;
+  loyaltyTier?: Schema.Types.ObjectId | null;
+
+  // 🆕 VIP
+  isVip: boolean;
+
   comparePassword(candidatePassword: string): Promise<boolean>;
   incrementAdsCount(): Promise<void>;
   incrementViews(views: number): Promise<void>;
@@ -153,6 +163,15 @@ const UserSchema = new Schema<IUser>(
       },
       default: defaultNotificationSettings,
     },
+
+    // 🆕 فیلدهای باشگاه
+    loyaltyPoints: { type: Number, default: 0 },
+    referralCode: { type: String, unique: true, sparse: true },
+    referredBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    loyaltyTier: { type: Schema.Types.ObjectId, ref: "LoyaltyTier", default: null },
+
+    // 🆕 فیلد VIP
+    isVip: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

@@ -17,19 +17,12 @@ export const protect = async (
   next: NextFunction,
 ) => {
   try {
-    console.log(
-      "🔒 Protect middleware - URL:",
-      req.originalUrl,
-      "Method:",
-      req.method,
-    );
+    console.log("🔒 Protect middleware - URL:", req.originalUrl, "Method:", req.method);
 
-    // ─── بررسی مجزا: مسیرهای /admin و /me حتماً باید احراز هویت شوند ───
     const isAdminOrUserRoute =
       req.originalUrl.includes("/admin/") || req.originalUrl.includes("/me");
 
     if (!isAdminOrUserRoute) {
-      // ─── ۱. مسیرهای کاملاً عمومی (بدون نیاز به توکن) ───
       const publicPaths = [
         "/api/auth/login",
         "/api/auth/register",
@@ -57,7 +50,6 @@ export const protect = async (
         return next();
       }
 
-      // ─── ۲. مسیرهای داینامیک فقط GET ───
       if (req.method === "GET") {
         const publicGetIdPatterns = [
           /^\/api\/properties\/[a-f0-9]{24}$/,
@@ -65,15 +57,12 @@ export const protect = async (
           /^\/api\/agents\/[a-f0-9]{24}$/,
         ];
 
-        if (
-          publicGetIdPatterns.some((pattern) => pattern.test(req.originalUrl))
-        ) {
+        if (publicGetIdPatterns.some((pattern) => pattern.test(req.originalUrl))) {
           console.log("✅ Public GET id route - skipping auth");
           return next();
         }
       }
 
-      // ─── ۳. مسیرهای عمومی GET (لیست‌ها، جستجو، فیلترها) ───
       const publicGetPatterns = [
         /^\/api\/ads(\?|$)/,
         /^\/api\/ads\/search/,
@@ -87,6 +76,7 @@ export const protect = async (
         /^\/api\/agents\/public/,
         /^\/api\/conversations\/[a-f0-9]{24}\/messages$/,
         /^\/api\/comments\/ad\//,
+        /^\/api\/users\/public\//,
       ];
 
       const isPublicGet =
@@ -99,7 +89,6 @@ export const protect = async (
       }
     }
 
-    // ─── ۴. احراز هویت برای مسیرهای محافظت‌شده (شامل admin و me) ───
     let token = req.headers.authorization?.startsWith("Bearer")
       ? req.headers.authorization.split(" ")[1]
       : undefined;
@@ -110,9 +99,7 @@ export const protect = async (
     console.log("🎫 Token found:", token ? "✅ Yes" : "❌ No");
 
     if (!token) {
-      return res
-        .status(401)
-        .json({ success: false, message: "لطفاً وارد شوید" });
+      return res.status(401).json({ success: false, message: "لطفاً وارد شوید" });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
@@ -137,30 +124,31 @@ export const protect = async (
     let user = await User.findById(decoded.id).select("-password");
     if (!user) {
       console.log("❌ User not found:", decoded.id);
-      return res
-        .status(401)
-        .json({ success: false, message: "کاربر یافت نشد" });
+      return res.status(401).json({ success: false, message: "کاربر یافت نشد" });
     }
 
     console.log("👤 User found - Role:", user.role);
 
-    if (user.role === "agent") {
-      const agent = await Agent.findOne({ userId: user._id }).lean();
-      if (agent) {
-        (user as any).agentId = agent._id;
-        (user as any).agencyId = agent.agencyId;
-        (user as any).propertiesCount = agent.propertiesCount || 0;
-        (user as any).agentStatus = agent.status;
+    // ✅ بررسی پروفایل مشاور بدون توجه به role کاربر
+    const agentProfile = await Agent.findOne({ userId: user._id }).lean();
 
-        if (agent.status === "inactive") {
-          return res.status(403).json({
-            success: false,
-            message: "حساب کارشناس شما غیرفعال شده است",
-          });
-        }
-      } else {
-        console.log("⚠️ Agent profile not found for user:", user._id);
+    if (agentProfile) {
+      user.role = "agent"; // نقش را agent می‌کنیم
+      (user as any).agentId = agentProfile._id;
+      (user as any).agencyId = agentProfile.agencyId;
+      (user as any).propertiesCount = agentProfile.propertiesCount || 0;
+      (user as any).agentStatus = agentProfile.status;
+      (user as any).isVerified = agentProfile.isVerified;
+      (user as any).verificationRequestId = agentProfile.verificationRequestId;
+
+      if (agentProfile.status === "inactive") {
+        return res.status(403).json({
+          success: false,
+          message: "حساب کارشناس شما غیرفعال شده است",
+        });
       }
+    } else if (user.role === "agent") {
+      console.log("⚠️ Agent profile not found for user:", user._id);
     }
 
     req.user = user;
@@ -171,21 +159,15 @@ export const protect = async (
     if (error instanceof jwt.JsonWebTokenError)
       return res.status(401).json({ success: false, message: "توکن نامعتبر" });
     if (error instanceof jwt.TokenExpiredError)
-      return res
-        .status(401)
-        .json({ success: false, message: "توکن منقضی شده" });
-    return res
-      .status(500)
-      .json({ success: false, message: "خطا در احراز هویت" });
+      return res.status(401).json({ success: false, message: "توکن منقضی شده" });
+    return res.status(500).json({ success: false, message: "خطا در احراز هویت" });
   }
 };
 
 export const requireRole = (...allowedRoles: string[]) => {
   return async (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
-      return res
-        .status(401)
-        .json({ success: false, message: "لطفاً وارد شوید" });
+      return res.status(401).json({ success: false, message: "لطفاً وارد شوید" });
     }
     if (!allowedRoles.includes(req.user.role)) {
       return res.status(403).json({
@@ -200,20 +182,14 @@ export const requireRole = (...allowedRoles: string[]) => {
 export const hasPermission = (...requiredPermissions: string[]) => {
   return async (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
-      return res
-        .status(401)
-        .json({ success: false, message: "شما وارد نشده‌اید" });
+      return res.status(401).json({ success: false, message: "شما وارد نشده‌اید" });
     }
     const roleDoc = await Role.findOne({ name: req.user.role, isActive: true });
     if (!roleDoc) {
-      return res
-        .status(403)
-        .json({ success: false, message: "نقش شما یافت نشد یا غیرفعال است" });
+      return res.status(403).json({ success: false, message: "نقش شما یافت نشد یا غیرفعال است" });
     }
     const userPermissions = roleDoc.permissions || [];
-    const hasAll = requiredPermissions.every((p) =>
-      userPermissions.includes(p),
-    );
+    const hasAll = requiredPermissions.every((p) => userPermissions.includes(p));
     if (!hasAll) {
       return res.status(403).json({
         success: false,
@@ -229,50 +205,25 @@ export const superAdminOnly = requireRole("super_admin");
 export const agentOnly = requireRole("agent", "admin", "super_admin");
 export const developerOnly = requireRole("developer", "admin", "super_admin");
 
-export const ownerOnly = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction,
-) => {
-  if (!req.user)
-    return res
-      .status(401)
-      .json({ success: false, message: "شما وارد نشده‌اید" });
+export const ownerOnly = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (!req.user) return res.status(401).json({ success: false, message: "شما وارد نشده‌اید" });
   const resourceUserId = req.params.userId || req.body.userId;
-  if (req.user.role === "admin" || req.user.role === "super_admin")
-    return next();
+  if (req.user.role === "admin" || req.user.role === "super_admin") return next();
   if (req.user._id.toString() !== resourceUserId) {
-    return res.status(403).json({
-      success: false,
-      message: "شما اجازه دسترسی به این منبع را ندارید",
-    });
+    return res.status(403).json({ success: false, message: "شما اجازه دسترسی به این منبع را ندارید" });
   }
   next();
 };
 
-export const profileComplete = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction,
-) => {
-  if (!req.user)
-    return res
-      .status(401)
-      .json({ success: false, message: "شما وارد نشده‌اید" });
+export const profileComplete = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (!req.user) return res.status(401).json({ success: false, message: "شما وارد نشده‌اید" });
   if (!req.user.firstName || !req.user.lastName || !req.user.email) {
-    return res.status(403).json({
-      success: false,
-      message: "لطفاً ابتدا پروفایل خود را کامل کنید",
-    });
+    return res.status(403).json({ success: false, message: "لطفاً ابتدا پروفایل خود را کامل کنید" });
   }
   next();
 };
 
-export const optionalAuth = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction,
-) => {
+export const optionalAuth = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     let token = req.headers.authorization?.startsWith("Bearer")
       ? req.headers.authorization.split(" ")[1]
@@ -292,12 +243,12 @@ export const optionalAuth = async (
 
     let user = await User.findById(decoded.id).select("-password");
     if (user) {
-      if (user.role === "agent") {
-        const agent = await Agent.findOne({ userId: user._id }).lean();
-        if (agent) {
-          (user as any).agentId = agent._id;
-          (user as any).agencyId = agent.agencyId;
-        }
+      const agentProfile = await Agent.findOne({ userId: user._id }).lean();
+      if (agentProfile) {
+        user.role = "agent";
+        (user as any).agentId = agentProfile._id;
+        (user as any).agencyId = agentProfile.agencyId;
+        (user as any).isVerified = agentProfile.isVerified;
       }
       req.user = user;
     }

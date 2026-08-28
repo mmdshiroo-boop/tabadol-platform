@@ -33,6 +33,7 @@ import { adsApi, Ad } from "@/services/api/ads.api";
 import { agentApi, Agent } from "@/services/api/agent.api";
 import { getImageUrl } from "@/lib/getImageUrl";
 import { cn } from "@/lib/utils";
+import LoyaltyStatusCard from "@/components/loyalty/LoyaltyStatusCard"; // ✅
 
 // ── Types ───────────────────────────────────
 interface DashboardStats {
@@ -164,6 +165,7 @@ export default function AgentDashboardPage() {
     return (
       <div className="space-y-6 px-3 sm:px-6" dir="rtl">
         <Skeleton className="h-20 rounded-2xl" />
+        <Skeleton className="h-28 rounded-2xl" /> {/* کارت باشگاه */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
             <Skeleton key={i} className="h-32 rounded-2xl" />
@@ -243,6 +245,11 @@ export default function AgentDashboardPage() {
             {refreshing ? "در حال بروزرسانی..." : "بروزرسانی"}
           </Button>
         </div>
+      </motion.div>
+
+      {/* کارت باشگاه مشتریان */}
+      <motion.div variants={itemVariants}>
+        <LoyaltyStatusCard />
       </motion.div>
 
       {/* ════ KPI Cards ════ */}
@@ -389,7 +396,7 @@ export default function AgentDashboardPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {recentAds.map((ad, index) => (
+                {recentAds.map((ad) => (
                   <div
                     key={ad._id}
                     className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-muted/20 hover:bg-muted/30 transition-colors border border-border/30 gap-3 group cursor-pointer"

@@ -520,6 +520,7 @@ AdSchema.index({ userId: 1, createdAt: -1 });
 AdSchema.index({ status: 1, expiresAt: 1 });
 AdSchema.index({ isVip: 1, vipExpiry: 1 });
 AdSchema.index({ isUrgent: 1, urgentExpiry: 1 });
+AdSchema.index({ source: 1, sourceId: 1 }, { sparse: true });
 AdSchema.index({ province: 1, city: 1 });
 AdSchema.index({ area: 1 });
 AdSchema.index({ rooms: 1 });
