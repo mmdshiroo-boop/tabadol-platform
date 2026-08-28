@@ -186,10 +186,8 @@ app.use(errorHandler);
 // ============================================================
 // راه‌اندازی سرور و اتصال به دیتابیس
 // ============================================================
-const PORT = process.env.PORT || 5001;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+const PORT = parseInt(process.env.PORT || "5001", 10);
+
 const startServer = async () => {
   try {
     await connectDB();
