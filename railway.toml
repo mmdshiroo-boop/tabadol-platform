@@ -1,4 +1,8 @@
 [build]
 builder = "dockerfile"
-dockerfilePath = "backend/Dockerfile"
-context = "./backend"
+dockerfilePath = "./Dockerfile"
+context = "."
+
+[service]
+# فایل nginx.conf در ریشه کپی شود
+build.copy = [{ source = "nginx.conf", target = "/etc/nginx/conf.d/custom.conf" }]
