@@ -159,11 +159,11 @@ async function downloadAndWatermarkImage(
     const resizedWm = await sharp(wm)
       .resize(120, 120, { fit: "inside", withoutEnlargement: true })
       .toBuffer();
-    await sharp(imageBuffer)
-      .resize(1024, undefined, { fit: "inside", withoutEnlargement: true })
-      .composite([{ input: resizedWm, gravity: "southwest" }])
-      .webp({ quality: 75 })
-      .toFile(filePath);
+   await sharp(imageBuffer, { failOnError: false })
+  .resize(1024, undefined, { fit: "inside", withoutEnlargement: true })
+  .composite([{ input: resizedWm, gravity: "southwest" }])
+  .webp({ quality: 70 }) // کاهش کیفیت برای سرعت بیشتر
+  .toFile(filePath);
     return `${BASE_URL}/uploads/ads/${filename}`;
   } catch (err: any) {
     console.error(`❌ خطا در واترمارک: ${err?.message}`);
@@ -173,7 +173,7 @@ async function downloadAndWatermarkImage(
 
 async function processAdImages(images: string[], adIndex: number): Promise<string[]> {
   if (!Array.isArray(images) || images.length === 0) return images;
-  return asyncPool(20, images, (url, idx) =>
+  return asyncPool(50, images, (url, idx) =>
     downloadAndWatermarkImage(url, adIndex, idx),
   );
 }
@@ -233,10 +233,15 @@ function extractPriceFromText(text: string): number | null {
 
 // ═══════════️ استخراج قیمت اصلی ════════════
 function extractPrice(d: any, attrs: Record<string, string>): number {
-  if (d.rawJsonLd?.price && typeof d.rawJsonLd.price === "number" && d.rawJsonLd.price > 0)
-    return d.rawJsonLd.price;
-  if (d.rawJsonLd?.offers?.Price && typeof d.rawJsonLd.offers.Price === "number" && d.rawJsonLd.offers.Price > 0)
+  // بررسی rawJsonLd شیپور
+  if (d.rawJsonLd?.offers?.Price && typeof d.rawJsonLd.offers.Price === "number" && d.rawJsonLd.offers.Price > 0) {
     return d.rawJsonLd.offers.Price;
+  }
+  if (d.rawJsonLd?.price && typeof d.rawJsonLd.price === "number" && d.rawJsonLd.price > 0) {
+    return d.rawJsonLd.price;
+  }
+
+  // دیوار: بررسی RENT_SLIDER (ودیعه/رهن)
   if (d.rawData?.sections?.LIST_DATA) {
     for (const widget of d.rawData.sections.LIST_DATA) {
       if (widget.widgetType === "RENT_SLIDER") {
@@ -245,37 +250,42 @@ function extractPrice(d: any, attrs: Record<string, string>): number {
       }
     }
   }
+
+  // قیمت مستقیم در d.price (عددی)
   if (typeof d.price === "number" && d.price > 0) return d.price;
+
+  // قیمت به صورت رشته
   if (typeof d.price === "string") {
     if (/توافقی|negotiable|رایگان|free/i.test(d.price.trim())) return 0;
     const n = parseNumber(d.price);
     if (n > 0) return n;
   }
+
+  // کلیدهای قیمت معمولی (فروش/رهن)
   const attrPriceKeys = ["قیمت کل", "قیمت", "ودیعه", "اجارهٔ ماهانه", "اجاره ماهانه", "پیش پرداخت"];
   for (const key of attrPriceKeys) {
     const v = parseNumber(attrs[key]);
     if (v > 0) return v;
   }
-  const dailyRentKeys = ["روزهای عادی", "آخر هفته", "روزهای خاص", "هزینهٔ هر نفر اضافه"];
-  for (const key of dailyRentKeys) {
-    const rawVal = attrs[key];
-    if (rawVal) {
-      const num = parseNumber(rawVal);
-      if (num > 0) return num;
-    }
-  }
+
+  // ❗ حذف dailyRentKeys از این‌جا (نباید قیمت اصلی شوند)
+
+  // بررسی ویجت‌های دیوار برای قیمت (UNEXPANDABLE_ROW و DESCRIPTION_ROW)
   if (d.rawData?.sections?.LIST_DATA) {
     for (const widget of d.rawData.sections.LIST_DATA) {
       if (widget.widgetType === "UNEXPANDABLE_ROW" || widget.widgetType === "DESCRIPTION_ROW") {
         const title = widget.dto?.data?.title;
         const value = widget.dto?.data?.value;
         if (title && value && /قیمت|ودیعه|اجاره|پیش‌پرداخت|روزهای عادی|آخر هفته|روزهای خاص|هزینه/i.test(title)) {
-          const num = parseNumber(value);
-          if (num > 0) return num;
+          // ❗ این‌ها قیمت روزانه هستند، نباید به عنوان قیمت اصلی در نظر گرفته شوند
+          // بنابراین از این حلقه برای استخراج قیمت صرف‌نظر می‌کنیم
+          continue;
         }
       }
     }
   }
+
+  // استخراج از SEO و توضیحات
   if (d.rawData?.seo) {
     const seoTitle = d.rawData.seo.title || "";
     const seoDesc = d.rawData.seo.description || "";
@@ -287,6 +297,8 @@ function extractPrice(d: any, attrs: Record<string, string>): number {
   if (descPrice) return descPrice;
   const titlePrice = extractPriceFromText(d.title);
   if (titlePrice) return titlePrice;
+
+  // استخراج عدد بزرگ از توضیحات (آخرین تلاش)
   const numbers = (d.description || "").match(/\d[\d,،٫]*\d/g);
   if (numbers) {
     let max = 0;
@@ -350,38 +362,42 @@ function mapToAdPayload(
   let title = (d.title || "").substring(0, 200) || "بدون عنوان";
 
   let description = d.description || "";
-  if (isDivar) {
-    if (!description || description === "توضیحات" || description.trim().length < 10) {
-      const seoDesc = d.rawData?.seo?.description;
-      if (seoDesc && seoDesc.trim().length > 10) {
-        description = seoDesc.trim();
-      } else {
-        try {
-          const descWidgets = d.rawData?.sections?.DESCRIPTION;
-          if (Array.isArray(descWidgets)) {
-            const real = descWidgets
-              .filter((w: any) => w.widgetType === "DESCRIPTION_ROW")
-              .map((w: any) => w.dto?.data?.text)
-              .join("\n")
-              .trim();
-            if (real) description = real;
-          }
-        } catch {}
-      }
+  // استخراج توضیحات از ویجت‌های دیوار اگر خالی یا کوتاه باشد
+  if (isDivar && (!description || description === "توضیحات" || description.trim().length < 10)) {
+    const seoDesc = d.rawData?.seo?.description;
+    if (seoDesc && seoDesc.trim().length > 10) {
+      description = seoDesc.trim();
+    } else {
+      try {
+        const descWidgets = d.rawData?.sections?.DESCRIPTION;
+        if (Array.isArray(descWidgets)) {
+          const real = descWidgets
+            .filter((w: any) => w.widgetType === "DESCRIPTION_ROW")
+            .map((w: any) => w.dto?.data?.text)
+            .join("\n")
+            .trim();
+          if (real) description = real;
+        }
+      } catch {}
     }
   }
 
-  let city = "",
-    province = "",
-    district = "",
-    latitude: number | undefined,
-    longitude: number | undefined;
+  // موقعیت مکانی
+  let city = "", province = "", district = "", latitude: number | undefined, longitude: number | undefined;
   if (isDivar) {
-    city = d.city || "";
+    city = d.city || d.rawData?.city?.name || "";
     district = d.district || "";
     if (d.coordinates) {
       latitude = d.coordinates.lat;
       longitude = d.coordinates.lng;
+    } else if (d.location?.exact_data?.point) {
+      latitude = d.location.exact_data.point.latitude;
+      longitude = d.location.exact_data.point.longitude;
+    }
+    // استخراج استان از rawData.city.parent (اختیاری)
+    if (d.rawData?.city?.parent) {
+      // می‌توانید یک mapping از ID استان به نام استان اضافه کنید
+      // فعلاً خالی می‌ماند
     }
   } else if (isSheypoor) {
     const geo = d.rawJsonLd?.itemOffered?.geo || d.rawJsonLd?.geo;
@@ -403,6 +419,7 @@ function mapToAdPayload(
     if (!province) province = d.province || "";
   }
 
+  // تصاویر
   let images: string[] = [];
   if (Array.isArray(d.images) && d.images.length > 0) {
     images = d.images;
@@ -423,6 +440,7 @@ function mapToAdPayload(
     images = [d.image];
   }
 
+  // نوع آگهی
   let adType = "sale";
   if (isDivar) {
     const cat = d.category || "";
@@ -434,6 +452,7 @@ function mapToAdPayload(
     else if (d.category === "forRent" || d.category?.includes("اجاره")) adType = "rent";
   }
 
+  // ویژگی‌ها
   let attrs: Record<string, string> = {};
   if (isDivar && Array.isArray(d.attributes)) {
     d.attributes.forEach((attr: any) => {
@@ -454,15 +473,18 @@ function mapToAdPayload(
     }
   }
 
+  // تشخیص اجاره روزانه
   if (isDivar && adType === "rent") {
     if (attrs["ظرفیت استاندارد"] || attrs["ظرفیت اضافه"] || attrs["روزهای عادی"] || attrs["آخر هفته"]) {
       adType = "daily_rent";
     }
   }
 
+  // استخراج قیمت (با تابع اصلاح‌شده)
   const price = extractPrice(d, attrs);
   const priceType = detectPriceType(d, attrs);
 
+  // ودیعه و اجاره ماهانه
   let deposit = parseNumber(attrs["ودیعه"] || attrs["پیش پرداخت"]);
   let monthlyRent = parseNumber(attrs["اجارهٔ ماهانه"] || attrs["اجاره ماهانه"]);
 
@@ -475,6 +497,7 @@ function mapToAdPayload(
     }
   }
 
+  // افزودن اطلاعات اجاره به توضیحات
   if ((adType === "rent" || adType === "daily_rent") && (deposit > 0 || monthlyRent > 0)) {
     const priceLines = [];
     if (deposit > 0) priceLines.push(`ودیعه: ${deposit.toLocaleString("fa-IR")} تومان`);
@@ -482,6 +505,7 @@ function mapToAdPayload(
     if (priceLines.length > 0) description = priceLines.join(" | ") + "\n\n" + description;
   }
 
+  // اجاره روزانه: قیمت‌های شبانه
   if (adType === "daily_rent") {
     const dailyPrices = [];
     if (attrs["روزهای عادی"]) dailyPrices.push(`روزهای عادی: ${attrs["روزهای عادی"]}`);
@@ -493,10 +517,12 @@ function mapToAdPayload(
     }
   }
 
+  // متراژ و اتاق
   let rooms = parseNumber(d.rooms || attrs["اتاق"] || attrs["تعداد اتاق"]);
-  let area = parseNumber(d.area || attrs["متراژ"] || attrs["متراژ ویلا"]);
+  let area = parseNumber(d.area || attrs["متراژ"] || attrs["متراژ ویلا"] || attrs["متراژ زمین"]);
   if (isSheypoor && d.area && typeof d.area === "number") area = d.area;
 
+  // امکانات
   let amenities: any = {};
   if (isDivar && d.features) {
     d.features.forEach((f: any) => {
@@ -515,8 +541,11 @@ function mapToAdPayload(
     });
   }
 
-  const contactPhone = d.phone || expertPhone;
-  const sellerName = d.seller || d.consultant || expertName;
+  // ❗ شماره تماس: فقط از JSON، نه شماره کارشناس
+  const contactPhone = d.phone || ""; // اگر خالی بود، خالی بماند
+
+  // نام فروشنده
+  const sellerName = d.seller || d.consultant || expertName; // فروشنده در صورت وجود
 
   const baseSlug = (title || "ad")
     .replace(/[^\w\u0600-\u06FF\s]/g, "")
@@ -540,7 +569,7 @@ function mapToAdPayload(
     source: isSheypoor ? "sheypoor" : isDivar ? "divar" : "manual",
     sourceUrl: item.url || d.url || "",
     sourceId,
-    contactPhone,
+    contactPhone, // اگر خالی باشد، frontend نمایش می‌دهد
     contactName: sellerName,
     sellerName,
     rooms,
@@ -679,12 +708,12 @@ async function processBulkTask(taskId: any) {
     const expertName = `${expert?.firstName || ""} ${expert?.lastName || ""}`.trim() || expertPhone;
 
     // مجموعه sourceIdهای موجود برای جلوگیری از تکراری
-    const existingSourceIds = new Set(
-      (await Ad.find(
-        { source: { $in: ["divar", "sheypoor", "bama", "manual"] }, sourceId: { $in: [] } },
-        { sourceId: 1 },
-      ).lean()).map((ad: any) => ad.sourceId)
-    );
+ const existingSourceIds = new Set(
+  (await Ad.find(
+    { source: { $in: ["divar", "sheypoor", "bama", "manual"] } },
+    { sourceId: 1 }
+  ).lean()).map((ad: any) => ad.sourceId)
+);
 
     // متغیرهای شمارنده
     let successCount = 0, errorCount = 0, skipCount = 0;
@@ -692,9 +721,9 @@ async function processBulkTask(taskId: any) {
     const errorLog: any[] = [];
     let lastSaveTime = Date.now();
 
-    const maybeSaveTask = async () => {
-      const now = Date.now();
-      if (processedCount % 20 === 0 || now - lastSaveTime > 5000) {
+const maybeSaveTask = async () => {
+  const now = Date.now();
+  if (processedCount % 50 === 0 || now - lastSaveTime > 10000) {
         await BulkTask.findByIdAndUpdate(taskId, {
           $set: {
             "progress.processed": Math.min(processedCount, totalItems),
@@ -708,7 +737,7 @@ async function processBulkTask(taskId: any) {
     };
 
     // دسته‌بندی برای درج
-    const BATCH_SIZE = 50;
+const BATCH_SIZE = 200;
     let adBatch: any[] = [];
     let auditLogBatch: any[] = [];
     const flushBatches = async () => {
