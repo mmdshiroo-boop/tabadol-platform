@@ -130,10 +130,11 @@ export const protect = async (
     console.log("👤 User found - Role:", user.role);
 
     // ✅ بررسی پروفایل مشاور بدون توجه به role کاربر
+    // اما اگر نقش کاربر admin یا super_admin است، نقش او را تغییر ندهیم
     const agentProfile = await Agent.findOne({ userId: user._id }).lean();
 
-    if (agentProfile) {
-      user.role = "agent"; // نقش را agent می‌کنیم
+    if (agentProfile && user.role !== "admin" && user.role !== "super_admin") {
+      user.role = "agent"; // فقط برای کاربران عادی یا سایر نقش‌ها
       (user as any).agentId = agentProfile._id;
       (user as any).agencyId = agentProfile.agencyId;
       (user as any).propertiesCount = agentProfile.propertiesCount || 0;
@@ -147,7 +148,7 @@ export const protect = async (
           message: "حساب کارشناس شما غیرفعال شده است",
         });
       }
-    } else if (user.role === "agent") {
+    } else if (user.role === "agent" && !agentProfile) {
       console.log("⚠️ Agent profile not found for user:", user._id);
     }
 
@@ -250,28 +251,19 @@ export const optionalAuth = async (req: AuthRequest, res: Response, next: NextFu
 
     let user = await User.findById(decoded.id).select("-password");
     if (user) {
-    const agentProfile = await Agent.findOne({ userId: user._id }).lean();
-
-    if (agentProfile && user.role !== "admin" && user.role !== "super_admin") {
-      user.role = "agent"; // فقط برای کاربران عادی یا سایر نقش‌ها
-      (user as any).agentId = agentProfile._id;
-      (user as any).agencyId = agentProfile.agencyId;
-      (user as any).propertiesCount = agentProfile.propertiesCount || 0;
-      (user as any).agentStatus = agentProfile.status;
-      (user as any).isVerified = agentProfile.isVerified;
-      (user as any).verificationRequestId = agentProfile.verificationRequestId;
-
-      if (agentProfile.status === "inactive") {
-        return res.status(403).json({
-          success: false,
-          message: "حساب کارشناس شما غیرفعال شده است",
-        });
+      const agentProfile = await Agent.findOne({ userId: user._id }).lean();
+      if (agentProfile) {
+        user.role = "agent";
+        (user as any).agentId = agentProfile._id;
+        (user as any).agencyId = agentProfile.agencyId;
+        (user as any).isVerified = agentProfile.isVerified;
       }
-    } else if (user.role === "agent" && !agentProfile) {
-      console.log("⚠️ Agent profile not found for user:", user._id);
+      req.user = user;
     }
-
-    req.user = user;
+  } catch (error) {
+    // خطا در احراز اختیاری – نادیده گرفته می‌شود
+  }
+  next();
 };
 
 export const authMiddleware = protect;
