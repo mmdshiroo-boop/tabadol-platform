@@ -71,12 +71,12 @@ export const expertApi = {
   },
   
 uploadBulkAds: async (formData: FormData) => {
-    const response = await apiClient.post("/expert/bulk-ads", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-      timeout: 30000, // فقط برای آپلود فایل، نه پردازش
-    });
-    return response.data;
-  },
+  const response = await apiClient.post("/expert/bulk-ads", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 300000, // ۵ دقیقه برای آپلود فایل‌های بزرگ
+  });
+  return response.data;
+},
   getTaskStatus: async (taskId: string) => {
     const response = await apiClient.get(`/expert/bulk-ads/task/${taskId}`);
     return response.data.data;

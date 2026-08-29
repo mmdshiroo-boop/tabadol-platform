@@ -6,7 +6,7 @@ console.log("🔧 API Client initialized with baseURL:", API_URL);
 
 const apiClient = axios.create({
   baseURL: API_URL,
-  timeout: 30000,
+  timeout: 120000, // ✅ از ۳۰ ثانیه به ۲ دقیقه افزایش یافت
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",

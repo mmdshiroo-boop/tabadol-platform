@@ -1,8 +1,10 @@
 // index.ts
+import dotenv from "dotenv";
+dotenv.config(); // ⬅️ اول از همه
+
 import express from "express";
 import fs from "fs";
 import cors from "cors";
-import dotenv from "dotenv";
 import path from "path";
 import http from "http";
 import cookieParser from "cookie-parser";
@@ -66,7 +68,6 @@ import adminRewardRoutes from "./routes/adminReward.routes";
 import agentClubRoutes from "./routes/agentClub.routes";
 import adminAgentClubRoutes from "./routes/adminAgentClub.routes";
 import superAdminAgentClubRoutes from "./routes/superAdminAgentClub.routes";
-dotenv.config();
 
 const app = express();
 
@@ -82,14 +83,14 @@ app.use(
     credentials: true,
   }),
 );
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "50mb" })); // افزایش محدودیت JSON
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cookieParser());
 
 app.use(
   fileUpload({
     createParentPath: true,
-    limits: { fileSize: 50 * 1024 * 1024 }, // ۵۰ مگابایت
+    limits: { fileSize: 500 * 1024 * 1024 }, // ۵۰۰ مگابایت
     useTempFiles: false,
     abortOnLimit: true,
   }),
@@ -104,7 +105,7 @@ app.use(apiLogger); // لاگ کلی همه درخواست‌ها
 app.use("/api/public", publicRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/market", marketRoutes);
-app.use("/api/locations", locationRoutes); // شامل استان‌ها، شهرها، IP و Reverse Geocode
+app.use("/api/locations", locationRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/ads", adRoutes);
 app.use("/api/page-view", pageViewRoutes);
@@ -150,28 +151,21 @@ app.use("/api/rewards", rewardRoutes);
 app.use("/api/follow", followRoutes);
 app.use("/api/admin/rewards", adminRewardRoutes);
 app.get("/api/users/public/:id", getPublicProfile);
-app.use("/api/agent/club", agentClubRoutes); 
+app.use("/api/agent/club", agentClubRoutes);
 app.use("/api/admin/agent-clubs", adminAgentClubRoutes);
 app.use("/api/super-admin/agent-clubs", superAdminAgentClubRoutes);
-// ============================================================
-// مسیرهای پنل ادمین و نقشه (همگام‌سازی شده با پیشوند /api/locations)
-// ============================================================
-// این بخش مشکل خطای 404 نقشه را به طور کامل برطرف می‌کند
-app.use("/api/locations", locationMapRoutes);
 
+// مسیرهای پنل ادمین و نقشه
+app.use("/api/locations", locationMapRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/super-admin/financial", financialRoutes);
 app.use("/api/super-admin", superAdminRoutes);
 
-// ============================================================
 // Swagger و Health Check
-// ============================================================
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs, {}));
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 
-// ============================================================
 // مدیریت خطای 404 و Error Handler مرکزی
-// ============================================================
 app.use((req, res) =>
   res.status(404).json({
     success: false,
@@ -196,11 +190,15 @@ const startServer = async () => {
     await connectDB();
     console.log("✅ Database connected successfully.");
 
-    // 🟢 راه‌اندازی Worker پردازش فله‌ای (بعد از دیتابیس، قبل از سرور)
     startBulkWorker();
     console.log("🔄 Bulk worker started in background.");
 
     const server = http.createServer(app);
+
+    // ⏱️ افزایش تایم‌اوت‌های سرور برای درخواست‌های طولانی (مثل آپلود فله‌ای)
+    server.timeout = 10 * 60 * 1000; // ۱۰ دقیقه (idle timeout)
+    server.requestTimeout = 10 * 60 * 1000; // ۱۰ دقیقه (کل درخواست)
+
     initSocket(server);
     server.listen(PORT, "0.0.0.0", () =>
       console.log(`🚀 Server running on port ${PORT}`),

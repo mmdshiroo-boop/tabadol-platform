@@ -643,6 +643,7 @@ export function startBulkWorker() {
   }, 5000);
 }
 
+// ═══════════️ پردازش وظیفه با Batch Insert و مصرف حافظه کم ════════════
 async function processBulkTask(taskId: any) {
   const task = await BulkTask.findOneAndUpdate(
     { _id: taskId, status: "pending" },
@@ -653,52 +654,50 @@ async function processBulkTask(taskId: any) {
 
   try {
     if (!fs.existsSync(task.fileName)) throw new Error("فایل ZIP یافت نشد");
+
     const zip = new AdmZip(task.fileName);
     const entries = zip.getEntries();
     const jsonFiles = entries.filter((e) => !e.isDirectory && e.entryName.endsWith(".json"));
     if (jsonFiles.length === 0) throw new Error("هیچ فایل JSON در ZIP یافت نشد");
 
-    const allItems: { item: any; fileName: string; index: number }[] = [];
+    // شمارش کل آیتم‌ها بدون نگه‌داری در حافظه
+    let totalItems = 0;
     for (const entry of jsonFiles) {
       try {
         const content = entry.getData().toString("utf8");
         const parsed = JSON.parse(content);
         const items = Array.isArray(parsed) ? parsed : [parsed];
-        items.forEach((item, idx) => allItems.push({ item, fileName: entry.entryName, index: idx }));
-      } catch {}
+        totalItems += items.length;
+      } catch (e) {}
     }
 
-    fs.unlink(task.fileName, () => {});
+    await BulkTask.findByIdAndUpdate(taskId, { "progress.total": totalItems });
 
-    await BulkTask.findByIdAndUpdate(taskId, { "progress.total": allItems.length });
-
-    const sourceIds = allItems.map(({ item }) => getSourceId(item));
-    const existingAds = await Ad.find(
-      { source: { $in: ["divar", "sheypoor", "bama", "manual"] }, sourceId: { $in: sourceIds } },
-      { sourceId: 1, source: 1 },
-    ).lean();
-    const existingSourceIds = new Set(existingAds.map((ad: any) => ad.sourceId));
-
+    // دریافت اطلاعات کارشناس
     const expert = await (await import("../models/Expert.model")).Expert.findOne({ userId: task.userId });
     const expertPhone = expert?.phone || "09120000000";
     const expertName = `${expert?.firstName || ""} ${expert?.lastName || ""}`.trim() || expertPhone;
 
-    const adDocs: any[] = [];
-    const auditLogDocs: any[] = [];
-    let successCount = 0,
-      errorCount = 0,
-      skipCount = 0;
-    const errorLog: any[] = [];
+    // مجموعه sourceIdهای موجود برای جلوگیری از تکراری
+    const existingSourceIds = new Set(
+      (await Ad.find(
+        { source: { $in: ["divar", "sheypoor", "bama", "manual"] }, sourceId: { $in: [] } },
+        { sourceId: 1 },
+      ).lean()).map((ad: any) => ad.sourceId)
+    );
+
+    // متغیرهای شمارنده
+    let successCount = 0, errorCount = 0, skipCount = 0;
     let processedCount = 0;
+    const errorLog: any[] = [];
     let lastSaveTime = Date.now();
 
     const maybeSaveTask = async () => {
       const now = Date.now();
       if (processedCount % 20 === 0 || now - lastSaveTime > 5000) {
-        const safeProcessed = Math.min(processedCount, allItems.length);
         await BulkTask.findByIdAndUpdate(taskId, {
           $set: {
-            "progress.processed": safeProcessed,
+            "progress.processed": Math.min(processedCount, totalItems),
             "progress.success": successCount,
             "progress.errors": errorCount,
             "progress.skipped": skipCount,
@@ -708,80 +707,129 @@ async function processBulkTask(taskId: any) {
       }
     };
 
-    await asyncPool(50, allItems, async ({ item, fileName, index }) => {
-      const identifier = `${fileName}[${index}]`;
-      try {
-        const d = item.data || item;
-
-        if (isAdUnavailable(d)) {
-          skipCount++;
-          errorLog.push({ row: identifier, index: index + 1, type: "skip", message: "آگهی در منبع اصلی فروخته یا حذف شده است" });
-          processedCount++;
-          await maybeSaveTask();
-          return;
+    // دسته‌بندی برای درج
+    const BATCH_SIZE = 50;
+    let adBatch: any[] = [];
+    let auditLogBatch: any[] = [];
+    const flushBatches = async () => {
+      if (adBatch.length > 0) {
+        try {
+          const inserted = await Ad.insertMany(adBatch, { ordered: false });
+          // به‌روزرسانی resourceId در audit logs
+          auditLogBatch.forEach((log, idx) => {
+            if (inserted[idx]) log.resourceId = inserted[idx]._id;
+          });
+        } catch (insertErr: any) {
+          console.error("Batch insert error:", insertErr);
         }
-
-        const sourceId = getSourceId(item);
-        if (existingSourceIds.has(sourceId)) {
-          skipCount++;
-          errorLog.push({ row: identifier, index: index + 1, type: "skip", message: "آگهی تکراری (قبلاً ثبت شده)" });
-          processedCount++;
-          await maybeSaveTask();
-          return;
+        if (auditLogBatch.length > 0) {
+          await AuditLog.insertMany(auditLogBatch, { ordered: false });
         }
-
-        const categoryId = await getCategoryId(d.title || "", d.description || "");
-        const catId = categoryId || "000000000000000000000000";
-        const adPayload = mapToAdPayload(item, task.userId.toString(), expertPhone, expertName, catId);
-
-        if (!isAdValid(adPayload)) {
-          skipCount++;
-          errorLog.push({ row: identifier, index: index + 1, type: "skip", message: "اطلاعات کافی نیست" });
-          processedCount++;
-          await maybeSaveTask();
-          return;
-        }
-
-        if (Array.isArray(adPayload.images) && adPayload.images.length > 0) {
-          adPayload.images = await processAdImages(adPayload.images, index);
-        }
-
-        adDocs.push(adPayload);
-        auditLogDocs.push({
-          userId: task.userId,
-          action: AuditAction.AD_CREATED,
-          resource: "Ad",
-          resourceId: null,
-          description: `کارشناس ${expertName} آگهی فله‌ای «${adPayload.title}» را ایجاد کرد.`,
-          metadata: { source: adPayload.source, originalId: adPayload.sourceId },
-          createdAt: new Date(),
-        });
-        successCount++;
-      } catch (itemErr: any) {
-        errorCount++;
-        errorLog.push({ row: identifier, index: index + 1, type: "error", message: itemErr.message });
-      } finally {
-        processedCount++;
-        await maybeSaveTask();
+        adBatch = [];
+        auditLogBatch = [];
       }
-    });
+    };
 
-    if (adDocs.length > 0) {
-      const insertedAds = await Ad.insertMany(adDocs, { ordered: false });
-      auditLogDocs.forEach((log, idx) => {
-        if (insertedAds[idx]) log.resourceId = insertedAds[idx]._id;
-      });
+    // پردازش هر فایل JSON به‌صورت ترتیبی
+    for (const entry of jsonFiles) {
+      try {
+        const content = entry.getData().toString("utf8");
+        const parsed = JSON.parse(content);
+        const items = Array.isArray(parsed) ? parsed : [parsed];
+
+        for (let idx = 0; idx < items.length; idx++) {
+          const item = items[idx];
+          const identifier = `${entry.entryName}[${idx}]`;
+
+          try {
+            const d = item.data || item;
+            if (isAdUnavailable(d)) {
+              skipCount++;
+              errorLog.push({ row: identifier, index: idx + 1, type: "skip", message: "آگهی در منبع اصلی فروخته یا حذف شده است" });
+              processedCount++;
+              await maybeSaveTask();
+              continue;
+            }
+
+            const sourceId = getSourceId(item);
+            // بررسی تکراری در DB و در batch فعلی
+            if (existingSourceIds.has(sourceId)) {
+              skipCount++;
+              errorLog.push({ row: identifier, index: idx + 1, type: "skip", message: "آگهی تکراری (قبلاً ثبت شده)" });
+              processedCount++;
+              await maybeSaveTask();
+              continue;
+            }
+            // اگر sourceId در batch فعلی هم هست، تکراری محسوب می‌شود
+            if (adBatch.some((ad) => ad.sourceId === sourceId)) {
+              skipCount++;
+              errorLog.push({ row: identifier, index: idx + 1, type: "skip", message: "آگهی تکراری (در همین فایل)" });
+              processedCount++;
+              await maybeSaveTask();
+              continue;
+            }
+
+            const categoryId = await getCategoryId(d.title || "", d.description || "");
+            const catId = categoryId || "000000000000000000000000";
+            const adPayload = mapToAdPayload(item, task.userId.toString(), expertPhone, expertName, catId);
+
+            if (!isAdValid(adPayload)) {
+              skipCount++;
+              errorLog.push({ row: identifier, index: idx + 1, type: "skip", message: "اطلاعات کافی نیست" });
+              processedCount++;
+              await maybeSaveTask();
+              continue;
+            }
+
+            if (Array.isArray(adPayload.images) && adPayload.images.length > 0) {
+              adPayload.images = await processAdImages(adPayload.images, idx);
+            }
+
+            // اضافه کردن به batch
+            adBatch.push(adPayload);
+            auditLogBatch.push({
+              userId: task.userId,
+              action: AuditAction.AD_CREATED,
+              resource: "Ad",
+              resourceId: null,
+              description: `کارشناس ${expertName} آگهی فله‌ای «${adPayload.title}» را ایجاد کرد.`,
+              metadata: { source: adPayload.source, originalId: adPayload.sourceId },
+              createdAt: new Date(),
+            });
+            // افزودن sourceId به Set برای جلوگیری از تکراری‌های بعدی
+            existingSourceIds.add(sourceId);
+            successCount++;
+
+            // اگر batch پر شد، flush کن
+            if (adBatch.length >= BATCH_SIZE) {
+              await flushBatches();
+            }
+          } catch (itemErr: any) {
+            errorCount++;
+            errorLog.push({ row: identifier, index: idx + 1, type: "error", message: itemErr.message });
+          } finally {
+            processedCount++;
+            await maybeSaveTask();
+          }
+        }
+      } catch (fileErr: any) {
+        errorCount++;
+        errorLog.push({ row: entry.entryName, index: 0, type: "error", message: `خطا در پردازش فایل JSON: ${fileErr.message}` });
+      }
     }
-    if (auditLogDocs.length > 0) {
-      await AuditLog.insertMany(auditLogDocs, { ordered: false });
-    }
+
+    // فلاش باقی‌مانده
+    await flushBatches();
+
+    // حذف فایل ZIP موقت
+    fs.unlink(task.fileName, () => {});
 
     await BulkTask.findByIdAndUpdate(taskId, {
       $set: {
         status: "completed",
         progress: {
-          total: allItems.length,
-          processed: allItems.length,
+          total: totalItems,
+          processed: totalItems,
           success: successCount,
           errors: errorCount,
           skipped: skipCount,
@@ -799,6 +847,7 @@ async function processBulkTask(taskId: any) {
       { success: successCount, errors: errorCount, skipped: skipCount },
     );
   } catch (err: any) {
+    console.error("Bulk task failed:", err);
     await BulkTask.findByIdAndUpdate(taskId, {
       $set: { status: "failed" },
       $push: { errorLog: { row: "system", index: 0, type: "error", message: err.message } },
