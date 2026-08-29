@@ -250,19 +250,28 @@ export const optionalAuth = async (req: AuthRequest, res: Response, next: NextFu
 
     let user = await User.findById(decoded.id).select("-password");
     if (user) {
-      const agentProfile = await Agent.findOne({ userId: user._id }).lean();
-      if (agentProfile) {
-        user.role = "agent";
-        (user as any).agentId = agentProfile._id;
-        (user as any).agencyId = agentProfile.agencyId;
-        (user as any).isVerified = agentProfile.isVerified;
+    const agentProfile = await Agent.findOne({ userId: user._id }).lean();
+
+    if (agentProfile && user.role !== "admin" && user.role !== "super_admin") {
+      user.role = "agent"; // فقط برای کاربران عادی یا سایر نقش‌ها
+      (user as any).agentId = agentProfile._id;
+      (user as any).agencyId = agentProfile.agencyId;
+      (user as any).propertiesCount = agentProfile.propertiesCount || 0;
+      (user as any).agentStatus = agentProfile.status;
+      (user as any).isVerified = agentProfile.isVerified;
+      (user as any).verificationRequestId = agentProfile.verificationRequestId;
+
+      if (agentProfile.status === "inactive") {
+        return res.status(403).json({
+          success: false,
+          message: "حساب کارشناس شما غیرفعال شده است",
+        });
       }
-      req.user = user;
+    } else if (user.role === "agent" && !agentProfile) {
+      console.log("⚠️ Agent profile not found for user:", user._id);
     }
-  } catch (error) {
-    // خطا در احراز اختیاری – نادیده گرفته می‌شود
-  }
-  next();
+
+    req.user = user;
 };
 
 export const authMiddleware = protect;
