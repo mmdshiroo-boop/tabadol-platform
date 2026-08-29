@@ -184,6 +184,13 @@ export const hasPermission = (...requiredPermissions: string[]) => {
     if (!req.user) {
       return res.status(401).json({ success: false, message: "شما وارد نشده‌اید" });
     }
+
+    // ✅ دسترسی کامل برای super_admin بدون نیاز به Role
+    if (req.user.role === "super_admin") {
+      console.log("✅ super_admin bypassing permission check");
+      return next();
+    }
+
     const roleDoc = await Role.findOne({ name: req.user.role, isActive: true });
     if (!roleDoc) {
       return res.status(403).json({ success: false, message: "نقش شما یافت نشد یا غیرفعال است" });
