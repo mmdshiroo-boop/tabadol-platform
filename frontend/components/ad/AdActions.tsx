@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
@@ -23,8 +23,6 @@ import { chatApi } from "@/services/api/chat.api";
 import { ReportModal } from "@/components/report/ReportModal";
 import VerifiedBadge from "@/components/common/VerifiedBadge";
 import Link from "next/link";
-import { useReactToPrint } from "react-to-print";
-import { AdPrintContent } from "./AdPrintContent";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api";
 
@@ -65,13 +63,6 @@ export function AdActions({
   const [reportOpen, setReportOpen] = useState(false);
   const { user } = useAuth();
   const router = useRouter();
-
-  const printRef = useRef<HTMLDivElement>(null);
-
-  const handlePrint = useReactToPrint({
-    contentRef: printRef,
-    documentTitle: adTitle || "آگهی",
-  });
 
   const formatPhoneNumber = (phone: string) => {
     if (!phone) return "";
@@ -245,7 +236,7 @@ export function AdActions({
         <Button
           variant="outline"
           className="w-full gap-2 rounded-xl h-11 text-xs font-bold"
-          onClick={() => handlePrint()}
+          onClick={() => window.print()}
         >
           <Printer className="w-4 h-4" />
           پرینت آگهی (PDF)
@@ -271,28 +262,6 @@ export function AdActions({
             اصالت کالا و هویت طرف مقابل اطمینان حاصل کنید. پلتفرم مسئولیتی در
             قبال تبادلات مالی ندارد.
           </p>
-        </div>
-      </div>
-
-      {/* بخش چاپ مخفی */}
-      <div
-        style={{
-          position: "absolute",
-          left: "-9999px",
-          top: 0,
-          width: "210mm",
-          minHeight: "297mm",
-          background: "white",
-          zIndex: -1,
-        }}
-        className="print-area"
-      >
-        <div ref={printRef}>
-          <AdPrintContent
-            adData={adData}
-            sellerName={sellerName}
-            sellerPhone={sellerPhone}
-          />
         </div>
       </div>
 
@@ -347,7 +316,7 @@ export function AdActions({
           variant="outline"
           size="icon"
           className="h-12 w-12 rounded-xl border-orange-500 text-orange-500 bg-white hover:bg-orange-50 flex-shrink-0"
-          onClick={() => handlePrint()}
+          onClick={() => window.print()}
         >
           <Printer className="w-5 h-5" />
         </Button>
