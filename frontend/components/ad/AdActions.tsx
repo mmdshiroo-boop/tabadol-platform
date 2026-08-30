@@ -274,7 +274,7 @@ export function AdActions({
         </div>
       </div>
 
-      {/* محتوای چاپ – خارج از دید، اما قابل چاپ */}
+      {/* محتوای چاپ – کاملاً مخفی، فقط هنگام پرینت نمایش داده می‌شود */}
       <div
         ref={printRef}
         style={{
@@ -284,7 +284,8 @@ export function AdActions({
           width: "210mm",
           minHeight: "297mm",
           background: "white",
-          zIndex: -1,
+          opacity: 0,
+          pointerEvents: "none",
         }}
         aria-hidden="true"
       >

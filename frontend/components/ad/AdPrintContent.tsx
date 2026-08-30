@@ -42,16 +42,16 @@ export function AdPrintContent({
         position: "relative",
       }}
     >
-      {/* استایل چاپ */}
+      {/* استایل چاپ – فقط هنگام پرینت فعال می‌شود */}
       <style>{`
         @media print {
           body * {
             visibility: hidden;
           }
-          .print-area, .print-area * {
+          .print-content-wrapper, .print-content-wrapper * {
             visibility: visible;
           }
-          .print-area {
+          .print-content-wrapper {
             position: absolute;
             left: 0;
             top: 0;
@@ -129,7 +129,7 @@ export function AdPrintContent({
         }
       `}</style>
 
-      <div className="print-area">
+      <div className="print-content-wrapper">
         {/* هدر */}
         <div
           className="print-header"
