@@ -444,6 +444,32 @@
    ═══════════════════════════════════════════════════════════════ */
 
 @media print {
+  /* مخفی‌کردن همه‌چیز */
+  body * {
+    visibility: hidden;
+  }
+
+  /* فقط کانتینر چاپ و فرزندانش نمایش داده شوند */
+  .print-only-container,
+  .print-only-container * {
+    visibility: visible;
+  }
+
+  /* تنظیم موقعیت و نمایش کانتینر چاپ */
+  .print-only-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+    z-index: 9999;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  /* حذف عناصر غیرضروری */
   nav,
   sidebar,
   button,
@@ -452,6 +478,7 @@
   .no-print {
     display: none !important;
   }
+
   body,
   .main-content {
     width: 100% !important;
@@ -461,12 +488,12 @@
     background: #fff !important;
     color: #000 !important;
   }
+
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 }
-
 
 
 /* ═══ Swiper Pagination — هویج ═══ */
