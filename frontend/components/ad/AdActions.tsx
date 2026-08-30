@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
@@ -23,8 +23,7 @@ import { chatApi } from "@/services/api/chat.api";
 import { ReportModal } from "@/components/report/ReportModal";
 import VerifiedBadge from "@/components/common/VerifiedBadge";
 import Link from "next/link";
-import { useReactToPrint } from "react-to-print";
-import { AdPrintContent } from "./AdPrintContent";
+import { printSingleAd, mapBackendAdToPrintAd } from "@/lib/printAds";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api";
 
@@ -63,15 +62,9 @@ export function AdActions({
   const [copied, setCopied] = useState(false);
   const [startingChat, setStartingChat] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const { user } = useAuth();
   const router = useRouter();
-
-  const printRef = useRef<HTMLDivElement>(null);
-
-  const handlePrint = useReactToPrint({
-    contentRef: printRef,
-    documentTitle: adTitle || "آگهی",
-  });
 
   const formatPhoneNumber = (phone: string) => {
     if (!phone) return "";
@@ -116,6 +109,26 @@ export function AdActions({
       toast.error(err.response?.data?.message || "خطا در شروع گفتگو");
     } finally {
       setStartingChat(false);
+    }
+  };
+
+  const handlePrintAd = async () => {
+    if (!adData) {
+      toast.error("داده آگهی برای چاپ موجود نیست");
+      return;
+    }
+    setPrinting(true);
+    try {
+      const printAd = mapBackendAdToPrintAd(adData);
+      await printSingleAd(printAd, {
+        baseUrl: API_BASE.replace("/api", ""),
+      });
+      toast.success("دانلود PDF آغاز شد");
+    } catch (error) {
+      console.error("Print error:", error);
+      toast.error("خطا در تولید PDF");
+    } finally {
+      setPrinting(false);
     }
   };
 
@@ -241,14 +254,19 @@ export function AdActions({
           </Button>
         )}
 
-        {/* پرینت آگهی */}
+        {/* پرینت آگهی (دانلود PDF) */}
         <Button
           variant="outline"
           className="w-full gap-2 rounded-xl h-11 text-xs font-bold"
-          onClick={() => handlePrint()}
+          onClick={handlePrintAd}
+          disabled={printing}
         >
-          <Printer className="w-4 h-4" />
-          پرینت آگهی (PDF)
+          {printing ? (
+            <span className="animate-spin">⏳</span>
+          ) : (
+            <Printer className="w-4 h-4" />
+          )}
+          {printing ? "در حال تولید PDF..." : "پرینت آگهی (PDF)"}
         </Button>
 
         {/* گزارش تخلف */}
@@ -272,28 +290,6 @@ export function AdActions({
             قبال تبادلات مالی ندارد.
           </p>
         </div>
-      </div>
-
-      {/* محتوای چاپ – کاملاً مخفی، فقط هنگام پرینت نمایش داده می‌شود */}
-      <div
-        ref={printRef}
-        style={{
-          position: "absolute",
-          left: "-9999px",
-          top: 0,
-          width: "210mm",
-          minHeight: "297mm",
-          background: "white",
-          opacity: 0,
-          pointerEvents: "none",
-        }}
-        aria-hidden="true"
-      >
-        <AdPrintContent
-          adData={adData}
-          sellerName={sellerName}
-          sellerPhone={sellerPhone}
-        />
       </div>
 
       {/* نوار چسبان پایین موبایل */}
@@ -347,7 +343,8 @@ export function AdActions({
           variant="outline"
           size="icon"
           className="h-12 w-12 rounded-xl border-orange-500 text-orange-500 bg-white hover:bg-orange-50 flex-shrink-0"
-          onClick={() => handlePrint()}
+          onClick={handlePrintAd}
+          disabled={printing}
         >
           <Printer className="w-5 h-5" />
         </Button>
