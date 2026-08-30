@@ -1,6 +1,11 @@
 // lib/printAds.ts — نسخه pdfmake با فونت پیش‌فرض
 
 import pdfMake from "pdfmake/build/pdfmake";
+import pdfFonts from "pdfmake/build/vfs_fonts";
+
+// اتصال فونت‌ها به pdfmake (الزامی برای تولید PDF)
+pdfMake.vfs = (pdfFonts as any).pdfMake.vfs;
+pdfMake.fonts = (pdfFonts as any).pdfMake.fonts;
 
 /* ═══════════════════════════════════════════════════════════════════
    TYPES
@@ -428,7 +433,6 @@ async function buildSingleAdDocument(ad: PrintAd, options?: PrintOptions) {
   const docDefinition: any = {
     pageSize: "A4",
     pageMargins: [40, 40, 40, 40],
-    // حذف defaultStyle.font برای استفاده از فونت پیش‌فرض
     content: [
       {
         columns: [
