@@ -4,8 +4,9 @@ import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 
 // اتصال فونت‌ها به pdfmake (الزامی برای تولید PDF)
-pdfMake.vfs = (pdfFonts as any).pdfMake.vfs;
-pdfMake.fonts = (pdfFonts as any).pdfMake.fonts;
+// برای رفع خطای TypeScript از any استفاده می‌کنیم
+(pdfMake as any).vfs = pdfFonts.pdfMake.vfs;
+(pdfMake as any).fonts = pdfFonts.pdfMake.fonts;
 
 /* ═══════════════════════════════════════════════════════════════════
    TYPES
