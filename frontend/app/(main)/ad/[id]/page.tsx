@@ -1,10 +1,10 @@
+// frontend/app/ad/[id]/page.tsx
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  MapPin,
   ChevronRight,
   ChevronLeft,
   Bookmark,
@@ -18,7 +18,6 @@ import AdImageGallery from "@/components/ad/AdGallery";
 import { AdBreadcrumb } from "@/components/ad/AdBreadcrumb";
 import { AdActions } from "@/components/ad/AdActions";
 import { getImageUrl } from "@/lib/getImageUrl";
-import { printSingleAd, mapBackendAdToPrintAd } from "@/lib/printAds";
 import { AdMaps } from "@/components/ad/AdMaps";
 
 interface AdDetail {
@@ -77,6 +76,13 @@ export default function AdDetailPage() {
   const [imgIdx, setImgIdx] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
 
+  // ✅ اسکرول به بالای صفحه هنگام ورود یا تغییر آگهی
+  useEffect(() => {
+    if (adId) {
+      window.scrollTo({ top: 0, behavior: "auto" });
+    }
+  }, [adId]);
+
   useEffect(() => {
     if (!adId) {
       setLoading(false);
@@ -88,6 +94,7 @@ export default function AdDetailPage() {
         const res = await apiClient.get(`/ads/${adId}`);
         setAd(res.data.data);
       } catch (error) {
+        console.error("Error fetching ad:", error);
         toast.error("خطا در دریافت اطلاعات آگهی");
       } finally {
         setLoading(false);
@@ -108,26 +115,24 @@ export default function AdDetailPage() {
     }
   };
 
- const handleShare = async () => {
-  try {
-    if (navigator.share) {
-      await navigator.share({
-        title: ad?.title || "مشاهده آگهی",
-        url: window.location.href,
-      });
-    } else {
-      await navigator.clipboard.writeText(window.location.href);
-      toast.success("لینک آگهی کپی شد");
+  const handleShare = async () => {
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: ad?.title || "مشاهده آگهی",
+          url: window.location.href,
+        });
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        toast.success("لینک آگهی کپی شد");
+      }
+      if (adId) {
+        await apiClient.post(`/ads/${adId}/share`);
+      }
+    } catch (error) {
+      toast.error("خطا در اشتراک‌گذاری");
     }
-
-    // ✅ ثبت امتیاز اشتراک‌گذاری (اگر کاربر وارد شده باشد)
-    if (adId) {
-      await apiClient.post(`/ads/${adId}/share`);
-    }
-  } catch (error) {
-    toast.error("خطا در اشتراک‌گذاری");
-  }
-};
+  };
 
   const handleReport = () => toast.info("گزارش تخلف ثبت شد");
 
@@ -143,10 +148,7 @@ export default function AdDetailPage() {
 
   if (loading) {
     return (
-      <div
-        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6"
-        dir="rtl"
-      >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6" dir="rtl">
         <Skeleton className="h-5 w-60 rounded-full" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
@@ -272,14 +274,14 @@ export default function AdDetailPage() {
         )}
       </div>
 
-<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-3 flex justify-center">
-  <AdBreadcrumb
-    cityName={ad.city}
-    citySlug={ad.city}
-    categories={ad.category ? [ad.category] : []}
-    adTitle={ad.title}
-  />
-</div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-3 flex justify-center">
+        <AdBreadcrumb
+          cityName={ad.city}
+          citySlug={ad.city}
+          categories={ad.category ? [ad.category] : []}
+          adTitle={ad.title}
+        />
+      </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-7 mt-4">
         <div className="lg:col-span-2 space-y-5">
