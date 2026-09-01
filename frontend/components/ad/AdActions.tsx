@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
@@ -23,6 +23,7 @@ import { chatApi } from "@/services/api/chat.api";
 import { ReportModal } from "@/components/report/ReportModal";
 import VerifiedBadge from "@/components/common/VerifiedBadge";
 import Link from "next/link";
+import { useReactToPrint } from "react-to-print";
 import { AdPrintContent } from "./AdPrintContent";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api";
@@ -65,6 +66,13 @@ export function AdActions({
   const { user } = useAuth();
   const router = useRouter();
 
+  const printRef = useRef<HTMLDivElement>(null);
+
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: adTitle || "آگهی",
+  });
+
   const formatPhoneNumber = (phone: string) => {
     if (!phone) return "";
     return phone.replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[parseInt(d)]);
@@ -80,7 +88,9 @@ export function AdActions({
   const getAvatarUrl = () => {
     if (!sellerAvatar) return "";
     if (sellerAvatar.startsWith("http")) return sellerAvatar;
-    return `${API_BASE.replace("/api", "")}${sellerAvatar.startsWith("/") ? "" : "/"}${sellerAvatar}`;
+    return `${API_BASE.replace("/api", "")}${
+      sellerAvatar.startsWith("/") ? "" : "/"
+    }${sellerAvatar}`;
   };
 
   const handleStartChat = async () => {
@@ -114,24 +124,26 @@ export function AdActions({
   return (
     <>
       <div
-        className="rounded-2xl border border-border bg-card shadow-sm p-5 space-y-4 text-right"
+        className="rounded-2xl border border-border bg-card shadow-sm p-4 sm:p-5 space-y-4 text-right w-full min-w-0"
         dir="rtl"
       >
         {/* پروفایل فروشنده */}
-        <div className="flex items-center gap-3">
-          <Avatar className="w-12 h-12 border-2 border-primary/20 rounded-full">
+        <div className="flex items-center gap-3 min-w-0">
+          <Avatar className="w-12 h-12 border-2 border-primary/20 rounded-full shrink-0">
             <AvatarImage
               src={sellerAvatar ? getAvatarUrl() : "/images/user.webp"}
               className="object-cover"
             />
-            <AvatarFallback className="bg-primary/10 text-primary font-black text-sm rounded-full" />
+            <AvatarFallback className="bg-primary/10 text-primary font-black text-sm rounded-full">
+              {sellerName?.slice(0, 2) || "ک"}
+            </AvatarFallback>
           </Avatar>
           <div className="space-y-0.5 flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-0">
               {sellerUserId ? (
                 <Link
                   href={`/profile/${sellerUserId}`}
-                  className="hover:underline underline-offset-4"
+                  className="hover:underline underline-offset-4 truncate block"
                 >
                   <h3 className="font-black text-sm md:text-base text-card-foreground truncate">
                     {sellerName}
@@ -164,7 +176,7 @@ export function AdActions({
 
         <Separator className="hidden md:block" />
 
-        {/* دکمه‌های تماس (دسکتاپ) */}
+        {/* دکمه‌های تماس دسکتاپ */}
         <div className="hidden md:flex flex-col space-y-2.5">
           {!showFullPhone ? (
             <Button
@@ -175,11 +187,11 @@ export function AdActions({
               اطلاعات تماس با فروشنده
             </Button>
           ) : (
-            <div className="flex gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="flex gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full">
               <Button
                 variant="outline"
                 size="icon"
-                className="h-11 w-11 rounded-xl text-muted-foreground hover:text-foreground flex-shrink-0"
+                className="h-11 w-11 rounded-xl text-muted-foreground hover:text-foreground shrink-0"
                 onClick={handleCopyPhone}
               >
                 {copied ? (
@@ -219,7 +231,6 @@ export function AdActions({
 
         <Separator />
 
-        {/* ارجاع به لینک اصلی */}
         {sourceUrl && (
           <Button
             variant="outline"
@@ -233,17 +244,15 @@ export function AdActions({
           </Button>
         )}
 
-        {/* پرینت آگهی */}
         <Button
           variant="outline"
           className="w-full gap-2 rounded-xl h-11 text-xs font-bold"
-          onClick={() => window.print()}
+          onClick={() => handlePrint()}
         >
           <Printer className="w-4 h-4" />
           پرینت آگهی (PDF)
         </Button>
 
-        {/* گزارش تخلف */}
         <Button
           variant="outline"
           className="w-full gap-2 rounded-xl h-11 text-xs font-bold text-muted-foreground border-destructive/20 hover:text-destructive hover:border-destructive/50 hover:bg-destructive/10 transition-all"
@@ -255,9 +264,8 @@ export function AdActions({
 
         <AdCalculator price={adPrice} area={adArea} title={adTitle} />
 
-        {/* هشدار امنیتی */}
         <div className="bg-amber-500/10 border border-dashed border-amber-500/20 p-3 rounded-xl flex items-start gap-2.5 select-none">
-          <ShieldAlert className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+          <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
           <p className="text-[11px] font-medium text-amber-600/90 leading-5 text-justify">
             پیش از انجام هرگونه معامله، پرداخت بیعانه یا ارسال کالا، حتماً از
             اصالت کالا و هویت طرف مقابل اطمینان حاصل کنید. پلتفرم مسئولیتی در
@@ -266,82 +274,86 @@ export function AdActions({
         </div>
       </div>
 
+      {/*
+        ✅ بخش چاپ — بدون left:-9999px
+        این روش محتوا را برای react-to-print نگه می‌دارد
+        ولی هیچ اسکرول افقی در موبایل/تبلت ایجاد نمی‌کند
+      */}
       <div
-        className="print-only-container"
-        style={{
-          position: "absolute",
-          left: "-9999px",
-          top: 0,
-          opacity: 0,
-          pointerEvents: "none",
-        }}
         aria-hidden="true"
+        className="absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0"
+        style={{
+          clip: "rect(0, 0, 0, 0)",
+          clipPath: "inset(50%)",
+        }}
       >
-        <AdPrintContent
-          adData={adData}
-          sellerName={sellerName}
-          sellerPhone={sellerPhone}
-        />
+        <div ref={printRef}>
+          <AdPrintContent
+            adData={adData}
+            sellerName={sellerName}
+            sellerPhone={sellerPhone}
+          />
+        </div>
       </div>
 
-      {/* نوار چسبان پایین موبایل */}
+      {/* نوار پایین موبایل */}
       <div
-        className="fixed bottom-0 inset-x-0 z-[100] flex md:hidden items-center gap-2 bg-background/95 backdrop-blur-xl border-t border-border p-3 px-4 shadow-[0_-10px_30px_-10px_rgba(0,0,0,0.1)]"
-        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+        className="fixed bottom-0 inset-x-0 z-[100] flex md:hidden items-center gap-2 bg-background/95 backdrop-blur-xl border-t border-border p-2.5 px-3 shadow-[0_-10px_30px_-10px_rgba(0,0,0,0.1)] w-full max-w-full box-border"
+        style={{ paddingBottom: "max(0.6rem, env(safe-area-inset-bottom))" }}
         dir="rtl"
       >
-        <Button
-          className="flex-1 h-12 rounded-xl bg-orange-500 text-white font-black text-sm hover:bg-orange-600 shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all"
-          onClick={() => setShowFullPhone(true)}
-        >
-          اطلاعات تماس
-        </Button>
-
         {!showFullPhone ? (
           <Button
-            variant="outline"
-            className="flex-1 h-12 rounded-xl border-2 border-orange-500 text-orange-500 bg-white font-black text-sm hover:bg-orange-50 active:scale-[0.98] transition-all"
-            onClick={handleStartChat}
-            disabled={startingChat}
+            className="flex-1 min-w-0 h-11 rounded-xl bg-orange-500 text-white font-black text-xs hover:bg-orange-600 shadow-md truncate"
+            onClick={() => setShowFullPhone(true)}
           >
-            {startingChat ? "در حال اتصال..." : "چت"}
+            اطلاعات تماس
           </Button>
         ) : (
-          <div className="flex-1 flex gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="flex-1 min-w-0 flex gap-1.5 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <Button
               variant="outline"
               size="icon"
-              className="h-12 w-12 rounded-xl border-orange-500 text-orange-500 bg-white hover:bg-orange-50 flex-shrink-0"
+              className="h-11 w-10 rounded-xl border-orange-500 text-orange-500 bg-white shrink-0"
               onClick={handleCopyPhone}
             >
               {copied ? (
-                <Check className="w-5 h-5 text-emerald-500" />
+                <Check className="w-4 h-4 text-emerald-500" />
               ) : (
-                <Copy className="w-5 h-5" />
+                <Copy className="w-4 h-4" />
               )}
             </Button>
             <Button
-              className="flex-1 h-12 rounded-xl bg-orange-500 text-white font-black text-sm shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all"
+              className="flex-1 min-w-0 h-11 rounded-xl bg-orange-500 text-white font-black text-xs shadow-md truncate"
               asChild
             >
-              <a href={`tel:${sellerPhone}`}>
+              <a href={`tel:${sellerPhone}`} className="truncate">
                 {formatPhoneNumber(sellerPhone)}
               </a>
             </Button>
           </div>
         )}
-        {/* دکمه پرینت در موبایل */}
+
+        <Button
+          variant="outline"
+          className="flex-1 min-w-0 h-11 rounded-xl border-2 border-orange-500 text-orange-500 bg-white font-black text-xs hover:bg-orange-50 truncate"
+          onClick={handleStartChat}
+          disabled={startingChat}
+        >
+          {startingChat ? "اتصال..." : "چت"}
+        </Button>
+
         <Button
           variant="outline"
           size="icon"
-          className="h-12 w-12 rounded-xl border-orange-500 text-orange-500 bg-white hover:bg-orange-50 flex-shrink-0"
-          onClick={() => window.print()}
+          className="h-11 w-11 rounded-xl border-orange-500 text-orange-500 bg-white shrink-0"
+          onClick={() => handlePrint()}
+          title="پرینت"
         >
-          <Printer className="w-5 h-5" />
+          <Printer className="w-4 h-4" />
         </Button>
       </div>
 
-      {/* Modal گزارش تخلف */}
       {adId && (
         <ReportModal
           open={reportOpen}

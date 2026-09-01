@@ -1,4 +1,3 @@
-// app/(main)/ad/[id]/page.tsx
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -76,11 +75,8 @@ export default function AdDetailPage() {
   const [imgIdx, setImgIdx] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
 
-  // ✅ اسکرول به بالا هنگام ورود یا تغییر آگهی
   useEffect(() => {
-    if (adId) {
-      window.scrollTo({ top: 0, behavior: "auto" });
-    }
+    if (adId) window.scrollTo({ top: 0, behavior: "auto" });
   }, [adId]);
 
   useEffect(() => {
@@ -103,6 +99,7 @@ export default function AdDetailPage() {
   }, [adId]);
 
   const handleBack = () => router.back();
+
   const handleSaveToggle = () => {
     const nextState = !isSaved;
     setIsSaved(nextState);
@@ -126,10 +123,8 @@ export default function AdDetailPage() {
         await navigator.clipboard.writeText(window.location.href);
         toast.success("لینک آگهی کپی شد");
       }
-      if (adId) {
-        await apiClient.post(`/ads/${adId}/share`);
-      }
-    } catch (error) {
+      if (adId) await apiClient.post(`/ads/${adId}/share`);
+    } catch {
       toast.error("خطا در اشتراک‌گذاری");
     }
   };
@@ -137,30 +132,30 @@ export default function AdDetailPage() {
   const handleReport = () => toast.info("گزارش تخلف ثبت شد");
 
   const nextSlide = () => {
-    if (!ad?.images || ad.images.length === 0) return;
+    if (!ad?.images?.length) return;
     setImgIdx((prev) => (prev === ad.images.length - 1 ? 0 : prev + 1));
   };
 
   const prevSlide = () => {
-    if (!ad?.images || ad.images.length === 0) return;
+    if (!ad?.images?.length) return;
     setImgIdx((prev) => (prev === 0 ? ad.images.length - 1 : prev - 1));
   };
 
   if (loading) {
     return (
       <div
-        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6"
+        className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6"
         dir="rtl"
       >
         <Skeleton className="h-5 w-60 rounded-full" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
-            <Skeleton className="aspect-[16/9] rounded-2xl" />
-            <Skeleton className="h-80 rounded-2xl" />
+            <Skeleton className="aspect-[16/9] rounded-2xl w-full" />
+            <Skeleton className="h-80 rounded-2xl w-full" />
           </div>
           <div className="space-y-4">
-            <Skeleton className="h-72 rounded-2xl" />
-            <Skeleton className="h-52 rounded-2xl" />
+            <Skeleton className="h-72 rounded-2xl w-full" />
+            <Skeleton className="h-52 rounded-2xl w-full" />
           </div>
         </div>
       </div>
@@ -169,7 +164,7 @@ export default function AdDetailPage() {
 
   if (!ad) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-24 text-center" dir="rtl">
+      <div className="w-full max-w-7xl mx-auto px-4 py-24 text-center" dir="rtl">
         <h2 className="text-2xl font-black mb-3">آگهی یافت نشد</h2>
       </div>
     );
@@ -183,21 +178,24 @@ export default function AdDetailPage() {
     typeof ad.latitude === "number" && typeof ad.longitude === "number";
 
   return (
-    <div className="flex flex-col items-center w-full min-h-screen bg-background">
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-28 md:pb-8 overflow-x-hidden">
+    <main
+      className="w-full min-h-screen bg-background overflow-x-clip"
+      dir="rtl"
+    >
+      <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pb-24 md:pb-10">
         {/* اسلایدر موبایل */}
         <div
-          className="relative w-full h-[300px] md:hidden cursor-pointer rounded-2xl overflow-hidden mt-2"
+          className="relative w-full h-[260px] sm:h-[350px] md:hidden cursor-pointer rounded-2xl overflow-hidden mt-2 border border-border/40 bg-muted"
           onClick={() => setModalOpen(true)}
         >
-          {ad.images && ad.images.length > 0 ? (
+          {ad.images?.length ? (
             <img
               src={getImageUrl(ad.images[imgIdx] || "/placeholder.jpg")}
               alt={ad.title}
               className="w-full h-full object-cover"
             />
           ) : (
-            <div className="w-full h-full bg-muted flex items-center justify-center">
+            <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">
               تصویر موجود نیست
             </div>
           )}
@@ -207,70 +205,76 @@ export default function AdDetailPage() {
               e.stopPropagation();
               handleBack();
             }}
-            className="absolute top-4 right-4 bg-white/90 p-2 rounded-xl text-gray-700 shadow-sm backdrop-blur-sm z-10"
+            className="absolute top-3 right-3 bg-white/90 p-2 rounded-xl text-gray-700 shadow-sm backdrop-blur-sm z-10"
           >
-            <ChevronRight size={24} />
+            <ChevronRight size={20} />
           </button>
 
-          <div className="absolute top-4 left-4 flex items-center bg-white/90 rounded-xl shadow-sm text-gray-700 backdrop-blur-sm z-10">
+          <div className="absolute top-3 left-3 flex items-center bg-white/90 rounded-xl shadow-sm text-gray-700 backdrop-blur-sm z-10">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 handleSaveToggle();
               }}
-              className={`p-2 transition-colors rounded-r-xl hover:bg-gray-200`}
+              className="p-2 rounded-r-xl hover:bg-gray-100"
             >
               <Bookmark
-                className={`w-4 h-4 ${isSaved ? "fill-primary text-primary" : "text-muted-foreground"}`}
+                className={`w-4 h-4 ${
+                  isSaved
+                    ? "fill-primary text-primary"
+                    : "text-muted-foreground"
+                }`}
               />
             </button>
-            <div className="w-[1px] h-5 bg-gray-300"></div>
+            <div className="w-px h-4 bg-gray-300" />
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 handleShare();
               }}
-              className="p-2 hover:bg-gray-200 transition-colors"
+              className="p-2 hover:bg-gray-100"
             >
-              <Share2 size={20} />
+              <Share2 size={16} />
             </button>
-            <div className="w-[1px] h-5 bg-gray-300"></div>
+            <div className="w-px h-4 bg-gray-300" />
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 handleReport();
               }}
-              className="p-2 hover:bg-gray-200 rounded-l-xl transition-colors"
+              className="p-2 rounded-l-xl hover:bg-gray-100"
             >
-              <AlertOctagon size={20} />
+              <AlertOctagon size={16} />
             </button>
           </div>
 
-          {ad.images && ad.images.length > 1 && (
+          {ad.images?.length > 1 && (
             <>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   prevSlide();
                 }}
-                className="absolute top-1/2 right-2 -translate-y-1/2 bg-white/50 p-1.5 rounded-full text-black z-10"
+                className="absolute top-1/2 right-2 -translate-y-1/2 bg-white/70 p-1.5 rounded-full z-10"
               >
-                <ChevronRight size={20} />
+                <ChevronRight size={18} />
               </button>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   nextSlide();
                 }}
-                className="absolute top-1/2 left-2 -translate-y-1/2 bg-white/50 p-1.5 rounded-full text-black z-10"
+                className="absolute top-1/2 left-2 -translate-y-1/2 bg-white/70 p-1.5 rounded-full z-10"
               >
-                <ChevronLeft size={20} />
+                <ChevronLeft size={18} />
               </button>
-              <div className="absolute bottom-3 left-0 right-0 flex justify-center items-center gap-2 z-10">
+              <div className="absolute bottom-2.5 inset-x-0 flex justify-center gap-1.5 z-10">
                 {ad.images.map((_, idx) => (
                   <div
                     key={idx}
-                    className={`h-2 w-2 rounded-full transition-all ${idx === imgIdx ? "bg-orange-500 scale-110" : "bg-black/50"}`}
+                    className={`h-1.5 rounded-full transition-all ${
+                      idx === imgIdx ? "bg-orange-500 w-3" : "bg-white/70 w-1.5"
+                    }`}
                   />
                 ))}
               </div>
@@ -278,8 +282,7 @@ export default function AdDetailPage() {
           )}
         </div>
 
-        {/* breadcrumb */}
-        <div className="mt-3 flex justify-center">
+        <div className="mt-3 w-full min-w-0">
           <AdBreadcrumb
             cityName={ad.city}
             citySlug={ad.city}
@@ -288,10 +291,9 @@ export default function AdDetailPage() {
           />
         </div>
 
-        {/* grid content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-7 mt-4">
-          <div className="lg:col-span-2 space-y-5 min-w-0">
-            <div className="hidden md:block">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-7 mt-2 w-full min-w-0">
+          <div className="lg:col-span-2 space-y-5 min-w-0 w-full">
+            <div className="hidden md:block w-full min-w-0">
               <AdImageGallery
                 images={ad.images}
                 isModalOpen={modalOpen}
@@ -326,7 +328,7 @@ export default function AdDetailPage() {
             />
           </div>
 
-          <aside className="lg:sticky lg:top-20 lg:self-start space-y-5 min-w-0">
+          <aside className="lg:sticky lg:top-20 lg:self-start space-y-5 min-w-0 w-full">
             <AdActions
               sellerName={sellerName}
               sellerPhone={ad.contactPhone}
@@ -342,16 +344,18 @@ export default function AdDetailPage() {
             />
 
             {hasCoordinates ? (
-              <AdMaps
-                city={ad.city}
-                district={ad.district}
-                address={ad.address}
-                latitude={ad.latitude as number}
-                longitude={ad.longitude as number}
-              />
+              <div className="w-full rounded-2xl overflow-hidden border border-border bg-card">
+                <AdMaps
+                  city={ad.city}
+                  district={ad.district}
+                  address={ad.address}
+                  latitude={ad.latitude as number}
+                  longitude={ad.longitude as number}
+                />
+              </div>
             ) : (
-              <div className="bg-card rounded-2xl border border-border p-5 text-center shadow-sm">
-                <p className="text-sm text-muted-foreground font-medium">
+              <div className="bg-card rounded-2xl border border-border p-4 text-center w-full">
+                <p className="text-xs text-muted-foreground font-medium">
                   موقعیت مکانی برای این آگهی ثبت نشده است
                 </p>
               </div>
@@ -359,6 +363,6 @@ export default function AdDetailPage() {
           </aside>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

@@ -112,14 +112,17 @@
     @apply border-border;
   }
 
+  /* ✅ بهینه‌سازی کانتینر برای ممانعت کامل از اسکرول افقی روی موبایل و تبلت */
   html,
   body {
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
     font-family: "Vazirmatn", system-ui, sans-serif;
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-bg);
-    overflow-x: hidden; /* جلوگیری از اسکرول افقی */
   }
 }
 
@@ -285,7 +288,7 @@
 
 .custom-popup .leaflet-popup-content {
   margin: 0 !important;
-  width: 260px !important;
+  width: 280px !important;
 }
 
 .custom-popup .leaflet-popup-tip {
@@ -406,74 +409,64 @@
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   Print — نسخه اصلاح‌شده
-   ═══════════════════════════════════════════════════════════════ */
-
-/* حالت عادی: مخفی از دید و بدون تأثیر بر layout */
+/* ❌ این را حذف کنید:
 .print-only-container {
   position: absolute;
   left: -9999px;
-  top: 0;
-  width: 100%;
-  max-width: 100%;
-  opacity: 0;
-  pointer-events: none;
-  visibility: hidden;
+  ...
+}
+*/
+
+/* ✅ جایگزین صحیح */
+.print-only-container,
+.print-area-host {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+  pointer-events: none !important;
 }
 
 @media print {
-  /* مخفی‌کردن همه‌چیز */
   body * {
-    visibility: hidden;
+    visibility: hidden !important;
   }
 
-  /* نمایش کانتینر چاپ و فرزندانش */
-  .print-only-container,
-  .print-only-container * {
-    visibility: visible;
-  }
-
-  .print-only-container {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-    background: #fff;
-    z-index: 9999;
-    opacity: 1 !important;
-    pointer-events: auto !important;
+  .print-area,
+  .print-area * {
     visibility: visible !important;
   }
 
-  /* حذف عناصر غیرضروری */
-  nav,
-  sidebar,
-  button,
-  input,
-  select,
-  .no-print {
-    display: none !important;
-  }
-
-  body,
-  .main-content {
+  .print-area {
+    position: absolute !important;
+    inset: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
-    padding: 0 !important;
     margin: 0 !important;
+    padding: 10mm !important;
     background: #fff !important;
     color: #000 !important;
   }
 
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
+  header,
+  footer,
+  nav,
+  aside,
+  button,
+  .no-print {
+    display: none !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
   }
 }
-
 /* ═══ Swiper Pagination — هویج ═══ */
 .havij-bullet {
   display: inline-block;
@@ -515,43 +508,6 @@
 }
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
-}
-
-/* در globals.css، مطمئن شوید این بخش وجود دارد: */
-.leaflet-container {
-  z-index: 1 !important;
-}
-.leaflet-pane {
-  z-index: 1 !important;
-}
-.leaflet-control {
-  z-index: 10 !important;
-}
-.leaflet-control-attribution {
-  display: none !important;
-}
-
-.custom-popup .leaflet-popup-content-wrapper {
-  border-radius: 16px !important;
-  padding: 0 !important;
-  overflow: hidden !important;
-  box-shadow: var(--shadow-xl) !important;
-  background: hsl(var(--card)) !important;
-  border: 1px solid hsl(var(--border)) !important;
-}
-
-.custom-popup .leaflet-popup-content {
-  margin: 0 !important;
-  width: 280px !important;
-}
-
-.custom-popup .leaflet-popup-tip {
-  background: hsl(var(--card)) !important;
-  border: 1px solid hsl(var(--border)) !important;
-}
-
-.custom-popup .leaflet-popup-close-button {
-  display: none !important;
 }
 
 .dark-blue-tiles {
