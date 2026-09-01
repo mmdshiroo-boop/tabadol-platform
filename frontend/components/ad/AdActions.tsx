@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import {
   Phone,
@@ -129,14 +129,15 @@ export function AdActions({
       >
         {/* پروفایل فروشنده */}
         <div className="flex items-center gap-3 min-w-0">
-          <Avatar className="w-12 h-12 border-2 border-primary/20 rounded-full shrink-0">
+          <Avatar className="w-12 h-12 border-2 border-primary/20 rounded-full shrink-0 relative">
             <AvatarImage
               src={sellerAvatar ? getAvatarUrl() : "/images/user.webp"}
               className="object-cover"
             />
-            <AvatarFallback className="bg-primary/10 text-primary font-black text-sm rounded-full">
+            {/* جایگزین AvatarFallback به دلیل مشکل تایپ */}
+            <span className="absolute inset-0 flex items-center justify-center bg-primary/10 text-primary font-black text-sm rounded-full">
               {sellerName?.slice(0, 2) || "ک"}
-            </AvatarFallback>
+            </span>
           </Avatar>
           <div className="space-y-0.5 flex-1 min-w-0">
             <div className="flex items-center gap-1.5 min-w-0">
@@ -274,11 +275,7 @@ export function AdActions({
         </div>
       </div>
 
-      {/*
-        ✅ بخش چاپ — بدون left:-9999px
-        این روش محتوا را برای react-to-print نگه می‌دارد
-        ولی هیچ اسکرول افقی در موبایل/تبلت ایجاد نمی‌کند
-      */}
+      {/* بخش چاپ مخفی بدون اسکرول افقی */}
       <div
         aria-hidden="true"
         className="absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0"
