@@ -6,6 +6,7 @@ import path from "path";
 import sharp from "sharp";
 import https from "https";
 import http from "http";
+import mongoose from "mongoose";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { sendNotificationToUser } from "../services/notification.service";
 import { Ad, Category } from "../models";
@@ -159,7 +160,6 @@ async function downloadAndWatermarkImage(
     const resizedWm = await sharp(wm)
       .resize(120, 120, { fit: "inside", withoutEnlargement: true })
       .toBuffer();
-    // اصلاح: حذف گزینه failOnError که در Sharp پشتیبانی نمی‌شود
     await sharp(imageBuffer)
       .resize(1024, undefined, { fit: "inside", withoutEnlargement: true })
       .composite([{ input: resizedWm, gravity: "southwest" }])
@@ -703,22 +703,43 @@ async function processBulkTask(taskId: any) {
     const BATCH_SIZE = 200;
     let adBatch: any[] = [];
     let auditLogBatch: any[] = [];
-    const flushBatches = async () => {
-      if (adBatch.length > 0) {
-        try {
-          const inserted = await Ad.insertMany(adBatch, { ordered: false });
-          auditLogBatch.forEach((log, idx) => {
-            if (inserted[idx]) log.resourceId = inserted[idx]._id;
-          });
-        } catch (insertErr: any) {
-          console.error("Batch insert error:", insertErr);
-        }
+
+    const flushBatches = async (): Promise<number> => {
+      if (adBatch.length === 0) return 0;
+      let insertedCount = 0;
+      try {
+        // تبدیل فیلدهای ObjectId به mongoose.Types.ObjectId
+        adBatch = adBatch.map((ad) => ({
+          ...ad,
+          category: new mongoose.Types.ObjectId(ad.category),
+          userId: new mongoose.Types.ObjectId(ad.userId),
+          uploadedBy: ad.uploadedBy ? new mongoose.Types.ObjectId(ad.uploadedBy) : null,
+        }));
+
+        const inserted = await Ad.insertMany(adBatch, { ordered: false });
+        insertedCount = inserted.length;
+        console.log(`✅ ${insertedCount} آگهی درج شد`);
+
+        auditLogBatch.forEach((log, idx) => {
+          if (inserted[idx]) log.resourceId = inserted[idx]._id;
+        });
         if (auditLogBatch.length > 0) {
           await AuditLog.insertMany(auditLogBatch, { ordered: false });
         }
+      } catch (insertErr: any) {
+        console.error("❌ Batch insert error:", insertErr);
+        errorLog.push({
+          row: "batch",
+          index: 0,
+          type: "error",
+          message: `خطا در درج دسته‌ای: ${insertErr.message}`,
+        });
+        errorCount += adBatch.length;
+      } finally {
         adBatch = [];
         auditLogBatch = [];
       }
+      return insertedCount;
     };
 
     for (const entry of jsonFiles) {
@@ -784,10 +805,10 @@ async function processBulkTask(taskId: any) {
               createdAt: new Date(),
             });
             existingSourceIds.add(sourceId);
-            successCount++;
 
             if (adBatch.length >= BATCH_SIZE) {
-              await flushBatches();
+              const insertedNow = await flushBatches();
+              successCount += insertedNow;
             }
           } catch (itemErr: any) {
             errorCount++;
@@ -803,7 +824,10 @@ async function processBulkTask(taskId: any) {
       }
     }
 
-    await flushBatches();
+    // فلاش باقی‌مانده
+    const remainingInserted = await flushBatches();
+    successCount += remainingInserted;
+
     fs.unlink(task.fileName, () => {});
 
     await BulkTask.findByIdAndUpdate(taskId, {
