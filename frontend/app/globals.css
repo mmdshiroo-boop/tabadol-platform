@@ -8,58 +8,46 @@
 
 @layer base {
   :root {
-    /* پس‌زمینه و متن اصلی */
     --background: 0 0% 100%;
     --foreground: 240 10% 10%;
 
-    /* کارت‌ها و پاپ‌اوورها */
     --card: 0 0% 100%;
     --card-foreground: 240 10% 10%;
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 10%;
 
-    /* رنگ اصلی — نارنجی هویج */
     --primary: 22 95% 50%;
     --primary-foreground: 0 0% 100%;
 
-    /* رنگ ثانویه — آبی */
     --secondary: 190 85% 40%;
     --secondary-foreground: 0 0% 100%;
 
-    /* Muted */
     --muted: 240 5% 96%;
     --muted-foreground: 240 4% 46%;
     --accent: 240 5% 96%;
     --accent-foreground: 240 10% 10%;
 
-    /* خطا / هشدار */
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    /* موفقیت */
     --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
 
-    /* هشدار */
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
-    /* اطلاعات */
     --info: 217 91% 60%;
     --info-foreground: 0 0% 100%;
 
-    /* حاشیه‌ها و اینپوت‌ها */
     --border: 240 6% 88%;
     --input: 240 6% 88%;
     --ring: 22 95% 50%;
 
     --radius: 0.75rem;
 
-    /* اسکرول‌بار */
     --scrollbar-bg: #f4f4f5;
     --scrollbar-thumb: #d4d4d8;
 
-    /* سایه‌ها */
     --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
       0 2px 4px -2px rgba(0, 0, 0, 0.1);
@@ -72,56 +60,44 @@
   }
 
   .dark {
-    /* پس‌زمینه و متن اصلی */
     --background: 240 10% 4%;
     --foreground: 0 0% 98%;
 
-    /* کارت‌ها و پاپ‌اوورها */
     --card: 240 10% 6%;
     --card-foreground: 0 0% 98%;
     --popover: 240 10% 6%;
     --popover-foreground: 0 0% 98%;
 
-    /* رنگ اصلی — نارنجی هویج */
     --primary: 22 95% 50%;
     --primary-foreground: 0 0% 100%;
 
-    /* رنگ ثانویه — آبی */
     --secondary: 190 85% 40%;
     --secondary-foreground: 0 0% 100%;
 
-    /* Muted */
     --muted: 240 5% 16%;
     --muted-foreground: 240 5% 65%;
     --accent: 240 5% 16%;
     --accent-foreground: 0 0% 98%;
 
-    /* خطا / هشدار */
     --destructive: 0 62% 40%;
     --destructive-foreground: 0 0% 98%;
 
-    /* موفقیت */
     --success: 142 71% 40%;
     --success-foreground: 0 0% 98%;
 
-    /* هشدار */
     --warning: 38 92% 45%;
     --warning-foreground: 0 0% 98%;
 
-    /* اطلاعات */
     --info: 217 91% 55%;
     --info-foreground: 0 0% 98%;
 
-    /* حاشیه‌ها و اینپوت‌ها */
     --border: 240 5% 20%;
     --input: 240 5% 20%;
     --ring: 22 95% 50%;
 
-    /* اسکرول‌بار */
     --scrollbar-bg: #09090b;
     --scrollbar-thumb: #27272a;
 
-    /* سایه‌ها */
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
@@ -143,6 +119,7 @@
     color: hsl(var(--foreground));
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-bg);
+    overflow-x: hidden; /* جلوگیری از اسکرول افقی */
   }
 }
 
@@ -150,14 +127,12 @@
    Sonner Toast — استایل‌های یکپارچه (سفید + نارنجی)
    ═══════════════════════════════════════════════════════════════ */
 
-/* خود کانتینر toastها */
 [data-sonner-toaster] {
   position: fixed !important;
   z-index: 99999 !important;
   font-family: "Vazirmatn", system-ui, sans-serif !important;
 }
 
-/* هر آیتم toast */
 [data-sonner-toaster] [data-sonner-toast] {
   direction: rtl !important;
   font-family: "Vazirmatn", system-ui, sans-serif !important;
@@ -170,10 +145,9 @@
   line-height: 1.6 !important;
 }
 
-/* ── موفقیت (Success) ── */
 [data-sonner-toast][data-type="success"] {
   background: #ffffff !important;
-  border: 1px solid #f97316 !important;   /* نارنجی هویج */
+  border: 1px solid #f97316 !important;
   color: #1f2937 !important;
 }
 [data-sonner-toast][data-type="success"] [data-icon] svg {
@@ -183,10 +157,9 @@
   color: #6b7280 !important;
 }
 
-/* ── خطا (Error) ── */
 [data-sonner-toast][data-type="error"] {
   background: #ffffff !important;
-  border: 1px solid #ef4444 !important;   /* قرمز */
+  border: 1px solid #ef4444 !important;
   color: #1f2937 !important;
 }
 [data-sonner-toast][data-type="error"] [data-icon] svg {
@@ -196,7 +169,6 @@
   color: #6b7280 !important;
 }
 
-/* ── هشدار (Warning) ── */
 [data-sonner-toast][data-type="warning"] {
   background: #ffffff !important;
   border: 1px solid #f59e0b !important;
@@ -209,7 +181,6 @@
   color: #6b7280 !important;
 }
 
-/* ── اطلاعات (Info) ── */
 [data-sonner-toast][data-type="info"] {
   background: #ffffff !important;
   border: 1px solid #3b82f6 !important;
@@ -222,14 +193,12 @@
   color: #6b7280 !important;
 }
 
-/* ── پیش‌فرض / Loading ── */
 [data-sonner-toast]:not([data-type]) {
   background: #ffffff !important;
   border: 1px solid #f97316 !important;
   color: #1f2937 !important;
 }
 
-/* ── دکمه Close ── */
 [data-sonner-toast] [data-close-button] {
   background: #f3f4f6 !important;
   border: 1px solid #e5e7eb !important;
@@ -241,7 +210,6 @@
   color: #1f2937 !important;
 }
 
-/* ── دکمه Action ── */
 [data-sonner-toast] [data-button] {
   background: #f97316 !important;
   color: #ffffff !important;
@@ -254,7 +222,6 @@
   background: #ea580c !important;
 }
 
-/* ── ریسپانسیو موبایل ── */
 @media (max-width: 640px) {
   [data-sonner-toaster] [data-sonner-toast] {
     border-radius: 10px !important;
@@ -440,8 +407,20 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   Print
+   Print — نسخه اصلاح‌شده
    ═══════════════════════════════════════════════════════════════ */
+
+/* حالت عادی: مخفی از دید و بدون تأثیر بر layout */
+.print-only-container {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  width: 100%;
+  max-width: 100%;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
 
 @media print {
   /* مخفی‌کردن همه‌چیز */
@@ -449,13 +428,12 @@
     visibility: hidden;
   }
 
-  /* فقط کانتینر چاپ و فرزندانش نمایش داده شوند */
+  /* نمایش کانتینر چاپ و فرزندانش */
   .print-only-container,
   .print-only-container * {
     visibility: visible;
   }
 
-  /* تنظیم موقعیت و نمایش کانتینر چاپ */
   .print-only-container {
     position: absolute;
     left: 0;
@@ -467,6 +445,7 @@
     z-index: 9999;
     opacity: 1 !important;
     pointer-events: auto !important;
+    visibility: visible !important;
   }
 
   /* حذف عناصر غیرضروری */
@@ -495,7 +474,6 @@
   }
 }
 
-
 /* ═══ Swiper Pagination — هویج ═══ */
 .havij-bullet {
   display: inline-block;
@@ -518,7 +496,6 @@
   border-radius: 9999px !important;
 }
 
-/* Dark mode */
 .dark .havij-bullet {
   background: hsl(var(--muted-foreground) / 0.15);
 }
@@ -539,7 +516,6 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
-
 
 /* در globals.css، مطمئن شوید این بخش وجود دارد: */
 .leaflet-container {

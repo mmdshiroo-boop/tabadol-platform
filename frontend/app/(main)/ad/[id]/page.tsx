@@ -1,4 +1,3 @@
-// frontend/app/ad/[id]/page.tsx
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -76,7 +75,7 @@ export default function AdDetailPage() {
   const [imgIdx, setImgIdx] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
 
-  // ✅ اسکرول به بالای صفحه هنگام ورود یا تغییر آگهی
+  // ✅ اسکرول به بالا هنگام ورود یا تغییر آگهی
   useEffect(() => {
     if (adId) {
       window.scrollTo({ top: 0, behavior: "auto" });
@@ -180,7 +179,7 @@ export default function AdDetailPage() {
     typeof ad.latitude === "number" && typeof ad.longitude === "number";
 
   return (
-    <div className="w-full pb-28 md:pb-6" dir="rtl">
+    <div className="w-full pb-28 md:pb-6 overflow-x-hidden" dir="rtl">
       {/* اسلایدر موبایل */}
       <div
         className="relative w-full h-[300px] md:hidden cursor-pointer"

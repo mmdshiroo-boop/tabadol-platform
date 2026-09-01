@@ -266,16 +266,12 @@ export function AdActions({
         </div>
       </div>
 
-      {/* محتوای چاپ مخفی – فقط هنگام پرینت نمایش داده می‌شود */}
       <div
         className="print-only-container"
         style={{
           position: "absolute",
           left: "-9999px",
           top: 0,
-          width: "210mm",
-          minHeight: "297mm",
-          background: "white",
           opacity: 0,
           pointerEvents: "none",
         }}
