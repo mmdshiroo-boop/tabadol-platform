@@ -6,7 +6,6 @@ import path from "path";
 import sharp from "sharp";
 import https from "https";
 import http from "http";
-import mongoose from "mongoose";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { sendNotificationToUser } from "../services/notification.service";
 import { Ad, Category } from "../models";
@@ -163,7 +162,7 @@ async function downloadAndWatermarkImage(
     await sharp(imageBuffer)
       .resize(1024, undefined, { fit: "inside", withoutEnlargement: true })
       .composite([{ input: resizedWm, gravity: "southwest" }])
-      .webp({ quality: 70 })
+      .webp({ quality: 75 })
       .toFile(filePath);
     return `${BASE_URL}/uploads/ads/${filename}`;
   } catch (err: any) {
@@ -174,7 +173,7 @@ async function downloadAndWatermarkImage(
 
 async function processAdImages(images: string[], adIndex: number): Promise<string[]> {
   if (!Array.isArray(images) || images.length === 0) return images;
-  return asyncPool(50, images, (url, idx) =>
+  return asyncPool(20, images, (url, idx) =>
     downloadAndWatermarkImage(url, adIndex, idx),
   );
 }
@@ -234,13 +233,10 @@ function extractPriceFromText(text: string): number | null {
 
 // ═══════════️ استخراج قیمت اصلی ════════════
 function extractPrice(d: any, attrs: Record<string, string>): number {
-  if (d.rawJsonLd?.offers?.Price && typeof d.rawJsonLd.offers.Price === "number" && d.rawJsonLd.offers.Price > 0) {
-    return d.rawJsonLd.offers.Price;
-  }
-  if (d.rawJsonLd?.price && typeof d.rawJsonLd.price === "number" && d.rawJsonLd.price > 0) {
+  if (d.rawJsonLd?.price && typeof d.rawJsonLd.price === "number" && d.rawJsonLd.price > 0)
     return d.rawJsonLd.price;
-  }
-
+  if (d.rawJsonLd?.offers?.Price && typeof d.rawJsonLd.offers.Price === "number" && d.rawJsonLd.offers.Price > 0)
+    return d.rawJsonLd.offers.Price;
   if (d.rawData?.sections?.LIST_DATA) {
     for (const widget of d.rawData.sections.LIST_DATA) {
       if (widget.widgetType === "RENT_SLIDER") {
@@ -249,33 +245,37 @@ function extractPrice(d: any, attrs: Record<string, string>): number {
       }
     }
   }
-
   if (typeof d.price === "number" && d.price > 0) return d.price;
-
   if (typeof d.price === "string") {
     if (/توافقی|negotiable|رایگان|free/i.test(d.price.trim())) return 0;
     const n = parseNumber(d.price);
     if (n > 0) return n;
   }
-
   const attrPriceKeys = ["قیمت کل", "قیمت", "ودیعه", "اجارهٔ ماهانه", "اجاره ماهانه", "پیش پرداخت"];
   for (const key of attrPriceKeys) {
     const v = parseNumber(attrs[key]);
     if (v > 0) return v;
   }
-
+  const dailyRentKeys = ["روزهای عادی", "آخر هفته", "روزهای خاص", "هزینهٔ هر نفر اضافه"];
+  for (const key of dailyRentKeys) {
+    const rawVal = attrs[key];
+    if (rawVal) {
+      const num = parseNumber(rawVal);
+      if (num > 0) return num;
+    }
+  }
   if (d.rawData?.sections?.LIST_DATA) {
     for (const widget of d.rawData.sections.LIST_DATA) {
       if (widget.widgetType === "UNEXPANDABLE_ROW" || widget.widgetType === "DESCRIPTION_ROW") {
         const title = widget.dto?.data?.title;
         const value = widget.dto?.data?.value;
         if (title && value && /قیمت|ودیعه|اجاره|پیش‌پرداخت|روزهای عادی|آخر هفته|روزهای خاص|هزینه/i.test(title)) {
-          continue;
+          const num = parseNumber(value);
+          if (num > 0) return num;
         }
       }
     }
   }
-
   if (d.rawData?.seo) {
     const seoTitle = d.rawData.seo.title || "";
     const seoDesc = d.rawData.seo.description || "";
@@ -287,7 +287,6 @@ function extractPrice(d: any, attrs: Record<string, string>): number {
   if (descPrice) return descPrice;
   const titlePrice = extractPriceFromText(d.title);
   if (titlePrice) return titlePrice;
-
   const numbers = (d.description || "").match(/\d[\d,،٫]*\d/g);
   if (numbers) {
     let max = 0;
@@ -351,35 +350,38 @@ function mapToAdPayload(
   let title = (d.title || "").substring(0, 200) || "بدون عنوان";
 
   let description = d.description || "";
-  if (isDivar && (!description || description === "توضیحات" || description.trim().length < 10)) {
-    const seoDesc = d.rawData?.seo?.description;
-    if (seoDesc && seoDesc.trim().length > 10) {
-      description = seoDesc.trim();
-    } else {
-      try {
-        const descWidgets = d.rawData?.sections?.DESCRIPTION;
-        if (Array.isArray(descWidgets)) {
-          const real = descWidgets
-            .filter((w: any) => w.widgetType === "DESCRIPTION_ROW")
-            .map((w: any) => w.dto?.data?.text)
-            .join("\n")
-            .trim();
-          if (real) description = real;
-        }
-      } catch {}
+  if (isDivar) {
+    if (!description || description === "توضیحات" || description.trim().length < 10) {
+      const seoDesc = d.rawData?.seo?.description;
+      if (seoDesc && seoDesc.trim().length > 10) {
+        description = seoDesc.trim();
+      } else {
+        try {
+          const descWidgets = d.rawData?.sections?.DESCRIPTION;
+          if (Array.isArray(descWidgets)) {
+            const real = descWidgets
+              .filter((w: any) => w.widgetType === "DESCRIPTION_ROW")
+              .map((w: any) => w.dto?.data?.text)
+              .join("\n")
+              .trim();
+            if (real) description = real;
+          }
+        } catch {}
+      }
     }
   }
 
-  let city = "", province = "", district = "", latitude: number | undefined, longitude: number | undefined;
+  let city = "",
+    province = "",
+    district = "",
+    latitude: number | undefined,
+    longitude: number | undefined;
   if (isDivar) {
-    city = d.city || d.rawData?.city?.name || "";
+    city = d.city || "";
     district = d.district || "";
     if (d.coordinates) {
       latitude = d.coordinates.lat;
       longitude = d.coordinates.lng;
-    } else if (d.location?.exact_data?.point) {
-      latitude = d.location.exact_data.point.latitude;
-      longitude = d.location.exact_data.point.longitude;
     }
   } else if (isSheypoor) {
     const geo = d.rawJsonLd?.itemOffered?.geo || d.rawJsonLd?.geo;
@@ -492,7 +494,7 @@ function mapToAdPayload(
   }
 
   let rooms = parseNumber(d.rooms || attrs["اتاق"] || attrs["تعداد اتاق"]);
-  let area = parseNumber(d.area || attrs["متراژ"] || attrs["متراژ ویلا"] || attrs["متراژ زمین"]);
+  let area = parseNumber(d.area || attrs["متراژ"] || attrs["متراژ ویلا"]);
   if (isSheypoor && d.area && typeof d.area === "number") area = d.area;
 
   let amenities: any = {};
@@ -513,7 +515,7 @@ function mapToAdPayload(
     });
   }
 
-  const contactPhone = d.phone || "";
+  const contactPhone = d.phone || expertPhone;
   const sellerName = d.seller || d.consultant || expertName;
 
   const baseSlug = (title || "ad")
@@ -651,46 +653,52 @@ async function processBulkTask(taskId: any) {
 
   try {
     if (!fs.existsSync(task.fileName)) throw new Error("فایل ZIP یافت نشد");
-
     const zip = new AdmZip(task.fileName);
     const entries = zip.getEntries();
     const jsonFiles = entries.filter((e) => !e.isDirectory && e.entryName.endsWith(".json"));
     if (jsonFiles.length === 0) throw new Error("هیچ فایل JSON در ZIP یافت نشد");
 
-    let totalItems = 0;
+    const allItems: { item: any; fileName: string; index: number }[] = [];
     for (const entry of jsonFiles) {
       try {
         const content = entry.getData().toString("utf8");
         const parsed = JSON.parse(content);
         const items = Array.isArray(parsed) ? parsed : [parsed];
-        totalItems += items.length;
-      } catch (e) {}
+        items.forEach((item, idx) => allItems.push({ item, fileName: entry.entryName, index: idx }));
+      } catch {}
     }
 
-    await BulkTask.findByIdAndUpdate(taskId, { "progress.total": totalItems });
+    fs.unlink(task.fileName, () => {});
+
+    await BulkTask.findByIdAndUpdate(taskId, { "progress.total": allItems.length });
+
+    const sourceIds = allItems.map(({ item }) => getSourceId(item));
+    const existingAds = await Ad.find(
+      { source: { $in: ["divar", "sheypoor", "bama", "manual"] }, sourceId: { $in: sourceIds } },
+      { sourceId: 1, source: 1 },
+    ).lean();
+    const existingSourceIds = new Set(existingAds.map((ad: any) => ad.sourceId));
 
     const expert = await (await import("../models/Expert.model")).Expert.findOne({ userId: task.userId });
     const expertPhone = expert?.phone || "09120000000";
     const expertName = `${expert?.firstName || ""} ${expert?.lastName || ""}`.trim() || expertPhone;
 
-    const existingSourceIds = new Set(
-      (await Ad.find(
-        { source: { $in: ["divar", "sheypoor", "bama", "manual"] } },
-        { sourceId: 1 }
-      ).lean()).map((ad: any) => ad.sourceId)
-    );
-
-    let successCount = 0, errorCount = 0, skipCount = 0;
-    let processedCount = 0;
+    const adDocs: any[] = [];
+    const auditLogDocs: any[] = [];
+    let successCount = 0,
+      errorCount = 0,
+      skipCount = 0;
     const errorLog: any[] = [];
+    let processedCount = 0;
     let lastSaveTime = Date.now();
 
     const maybeSaveTask = async () => {
       const now = Date.now();
-      if (processedCount % 50 === 0 || now - lastSaveTime > 10000) {
+      if (processedCount % 20 === 0 || now - lastSaveTime > 5000) {
+        const safeProcessed = Math.min(processedCount, allItems.length);
         await BulkTask.findByIdAndUpdate(taskId, {
           $set: {
-            "progress.processed": Math.min(processedCount, totalItems),
+            "progress.processed": safeProcessed,
             "progress.success": successCount,
             "progress.errors": errorCount,
             "progress.skipped": skipCount,
@@ -700,142 +708,80 @@ async function processBulkTask(taskId: any) {
       }
     };
 
-    const BATCH_SIZE = 200;
-    let adBatch: any[] = [];
-    let auditLogBatch: any[] = [];
-
-    const flushBatches = async (): Promise<number> => {
-      if (adBatch.length === 0) return 0;
-      let insertedCount = 0;
+    await asyncPool(50, allItems, async ({ item, fileName, index }) => {
+      const identifier = `${fileName}[${index}]`;
       try {
-        // تبدیل فیلدهای ObjectId به mongoose.Types.ObjectId
-        adBatch = adBatch.map((ad) => ({
-          ...ad,
-          category: new mongoose.Types.ObjectId(ad.category),
-          userId: new mongoose.Types.ObjectId(ad.userId),
-          uploadedBy: ad.uploadedBy ? new mongoose.Types.ObjectId(ad.uploadedBy) : null,
-        }));
+        const d = item.data || item;
 
-        const inserted = await Ad.insertMany(adBatch, { ordered: false });
-        insertedCount = inserted.length;
-        console.log(`✅ ${insertedCount} آگهی درج شد`);
-
-        auditLogBatch.forEach((log, idx) => {
-          if (inserted[idx]) log.resourceId = inserted[idx]._id;
-        });
-        if (auditLogBatch.length > 0) {
-          await AuditLog.insertMany(auditLogBatch, { ordered: false });
+        if (isAdUnavailable(d)) {
+          skipCount++;
+          errorLog.push({ row: identifier, index: index + 1, type: "skip", message: "آگهی در منبع اصلی فروخته یا حذف شده است" });
+          processedCount++;
+          await maybeSaveTask();
+          return;
         }
-      } catch (insertErr: any) {
-        console.error("❌ Batch insert error:", insertErr);
-        errorLog.push({
-          row: "batch",
-          index: 0,
-          type: "error",
-          message: `خطا در درج دسته‌ای: ${insertErr.message}`,
-        });
-        errorCount += adBatch.length;
-      } finally {
-        adBatch = [];
-        auditLogBatch = [];
-      }
-      return insertedCount;
-    };
 
-    for (const entry of jsonFiles) {
-      try {
-        const content = entry.getData().toString("utf8");
-        const parsed = JSON.parse(content);
-        const items = Array.isArray(parsed) ? parsed : [parsed];
-
-        for (let idx = 0; idx < items.length; idx++) {
-          const item = items[idx];
-          const identifier = `${entry.entryName}[${idx}]`;
-
-          try {
-            const d = item.data || item;
-            if (isAdUnavailable(d)) {
-              skipCount++;
-              errorLog.push({ row: identifier, index: idx + 1, type: "skip", message: "آگهی در منبع اصلی فروخته یا حذف شده است" });
-              processedCount++;
-              await maybeSaveTask();
-              continue;
-            }
-
-            const sourceId = getSourceId(item);
-            if (existingSourceIds.has(sourceId)) {
-              skipCount++;
-              errorLog.push({ row: identifier, index: idx + 1, type: "skip", message: "آگهی تکراری (قبلاً ثبت شده)" });
-              processedCount++;
-              await maybeSaveTask();
-              continue;
-            }
-            if (adBatch.some((ad) => ad.sourceId === sourceId)) {
-              skipCount++;
-              errorLog.push({ row: identifier, index: idx + 1, type: "skip", message: "آگهی تکراری (در همین فایل)" });
-              processedCount++;
-              await maybeSaveTask();
-              continue;
-            }
-
-            const categoryId = await getCategoryId(d.title || "", d.description || "");
-            const catId = categoryId || "000000000000000000000000";
-            const adPayload = mapToAdPayload(item, task.userId.toString(), expertPhone, expertName, catId);
-
-            if (!isAdValid(adPayload)) {
-              skipCount++;
-              errorLog.push({ row: identifier, index: idx + 1, type: "skip", message: "اطلاعات کافی نیست" });
-              processedCount++;
-              await maybeSaveTask();
-              continue;
-            }
-
-            if (Array.isArray(adPayload.images) && adPayload.images.length > 0) {
-              adPayload.images = await processAdImages(adPayload.images, idx);
-            }
-
-            adBatch.push(adPayload);
-            auditLogBatch.push({
-              userId: task.userId,
-              action: AuditAction.AD_CREATED,
-              resource: "Ad",
-              resourceId: null,
-              description: `کارشناس ${expertName} آگهی فله‌ای «${adPayload.title}» را ایجاد کرد.`,
-              metadata: { source: adPayload.source, originalId: adPayload.sourceId },
-              createdAt: new Date(),
-            });
-            existingSourceIds.add(sourceId);
-
-            if (adBatch.length >= BATCH_SIZE) {
-              const insertedNow = await flushBatches();
-              successCount += insertedNow;
-            }
-          } catch (itemErr: any) {
-            errorCount++;
-            errorLog.push({ row: identifier, index: idx + 1, type: "error", message: itemErr.message });
-          } finally {
-            processedCount++;
-            await maybeSaveTask();
-          }
+        const sourceId = getSourceId(item);
+        if (existingSourceIds.has(sourceId)) {
+          skipCount++;
+          errorLog.push({ row: identifier, index: index + 1, type: "skip", message: "آگهی تکراری (قبلاً ثبت شده)" });
+          processedCount++;
+          await maybeSaveTask();
+          return;
         }
-      } catch (fileErr: any) {
+
+        const categoryId = await getCategoryId(d.title || "", d.description || "");
+        const catId = categoryId || "000000000000000000000000";
+        const adPayload = mapToAdPayload(item, task.userId.toString(), expertPhone, expertName, catId);
+
+        if (!isAdValid(adPayload)) {
+          skipCount++;
+          errorLog.push({ row: identifier, index: index + 1, type: "skip", message: "اطلاعات کافی نیست" });
+          processedCount++;
+          await maybeSaveTask();
+          return;
+        }
+
+        if (Array.isArray(adPayload.images) && adPayload.images.length > 0) {
+          adPayload.images = await processAdImages(adPayload.images, index);
+        }
+
+        adDocs.push(adPayload);
+        auditLogDocs.push({
+          userId: task.userId,
+          action: AuditAction.AD_CREATED,
+          resource: "Ad",
+          resourceId: null,
+          description: `کارشناس ${expertName} آگهی فله‌ای «${adPayload.title}» را ایجاد کرد.`,
+          metadata: { source: adPayload.source, originalId: adPayload.sourceId },
+          createdAt: new Date(),
+        });
+        successCount++;
+      } catch (itemErr: any) {
         errorCount++;
-        errorLog.push({ row: entry.entryName, index: 0, type: "error", message: `خطا در پردازش فایل JSON: ${fileErr.message}` });
+        errorLog.push({ row: identifier, index: index + 1, type: "error", message: itemErr.message });
+      } finally {
+        processedCount++;
+        await maybeSaveTask();
       }
+    });
+
+    if (adDocs.length > 0) {
+      const insertedAds = await Ad.insertMany(adDocs, { ordered: false });
+      auditLogDocs.forEach((log, idx) => {
+        if (insertedAds[idx]) log.resourceId = insertedAds[idx]._id;
+      });
     }
-
-    // فلاش باقی‌مانده
-    const remainingInserted = await flushBatches();
-    successCount += remainingInserted;
-
-    fs.unlink(task.fileName, () => {});
+    if (auditLogDocs.length > 0) {
+      await AuditLog.insertMany(auditLogDocs, { ordered: false });
+    }
 
     await BulkTask.findByIdAndUpdate(taskId, {
       $set: {
         status: "completed",
         progress: {
-          total: totalItems,
-          processed: totalItems,
+          total: allItems.length,
+          processed: allItems.length,
           success: successCount,
           errors: errorCount,
           skipped: skipCount,
@@ -853,7 +799,6 @@ async function processBulkTask(taskId: any) {
       { success: successCount, errors: errorCount, skipped: skipCount },
     );
   } catch (err: any) {
-    console.error("Bulk task failed:", err);
     await BulkTask.findByIdAndUpdate(taskId, {
       $set: { status: "failed" },
       $push: { errorLog: { row: "system", index: 0, type: "error", message: err.message } },
