@@ -28,9 +28,6 @@ export function AdPrintContent({
     .filter(([, value]) => value)
     .map(([key]) => key);
 
-  // استخراج ویژگی‌های اضافی داینامیک
-  const additionalProperties = adData?.additionalProperties || [];
-
   return (
     <div
       dir="rtl"
@@ -45,16 +42,16 @@ export function AdPrintContent({
         position: "relative",
       }}
     >
-      {/* استایل چاپ – فقط هنگام پرینت فعال می‌شود */}
+      {/* استایل چاپ */}
       <style>{`
         @media print {
           body * {
             visibility: hidden;
           }
-          .print-content-wrapper, .print-content-wrapper * {
+          .print-area, .print-area * {
             visibility: visible;
           }
-          .print-content-wrapper {
+          .print-area {
             position: absolute;
             left: 0;
             top: 0;
@@ -132,7 +129,7 @@ export function AdPrintContent({
         }
       `}</style>
 
-      <div className="print-content-wrapper">
+      <div className="print-area">
         {/* هدر */}
         <div
           className="print-header"
@@ -256,11 +253,6 @@ export function AdPrintContent({
               ["سن بنا", adData?.buildingAge ? `${adData.buildingAge} سال` : "—"],
               ["سند", adData?.documentType],
               ["کاربری", adData?.usage],
-              // ویژگی‌های اضافی داینامیک
-              ...additionalProperties.map((prop: any) => [
-                prop.name,
-                prop.value,
-              ]),
             ].map(([label, value], idx) => (
               <tr key={idx} style={{ background: idx % 2 === 0 ? "#f8fafc" : "#fff" }}>
                 <td

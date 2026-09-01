@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
@@ -23,6 +23,7 @@ import { chatApi } from "@/services/api/chat.api";
 import { ReportModal } from "@/components/report/ReportModal";
 import VerifiedBadge from "@/components/common/VerifiedBadge";
 import Link from "next/link";
+import { useReactToPrint } from "react-to-print";
 import { AdPrintContent } from "./AdPrintContent";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api";
@@ -64,6 +65,13 @@ export function AdActions({
   const [reportOpen, setReportOpen] = useState(false);
   const { user } = useAuth();
   const router = useRouter();
+
+  const printRef = useRef<HTMLDivElement>(null);
+
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: adTitle || "آگهی",
+  });
 
   const formatPhoneNumber = (phone: string) => {
     if (!phone) return "";
@@ -237,7 +245,7 @@ export function AdActions({
         <Button
           variant="outline"
           className="w-full gap-2 rounded-xl h-11 text-xs font-bold"
-          onClick={() => window.print()}
+          onClick={() => handlePrint()}
         >
           <Printer className="w-4 h-4" />
           پرینت آگهی (PDF)
@@ -266,10 +274,8 @@ export function AdActions({
         </div>
       </div>
 
-      {/* محتوای چاپ مخفی – فقط هنگام پرینت نمایش داده می‌شود */}
-          {/* محتوای چاپ مخفی – فقط هنگام پرینت نمایش داده می‌شود */}
+      {/* بخش چاپ مخفی */}
       <div
-        className="print-only-container"
         style={{
           position: "absolute",
           left: "-9999px",
@@ -277,16 +283,17 @@ export function AdActions({
           width: "210mm",
           minHeight: "297mm",
           background: "white",
-          opacity: 0,
-          pointerEvents: "none",
+          zIndex: -1,
         }}
-        aria-hidden="true"
+        className="print-area"
       >
-        <AdPrintContent
-          adData={adData}
-          sellerName={sellerName}
-          sellerPhone={sellerPhone}
-        />
+        <div ref={printRef}>
+          <AdPrintContent
+            adData={adData}
+            sellerName={sellerName}
+            sellerPhone={sellerPhone}
+          />
+        </div>
       </div>
 
       {/* نوار چسبان پایین موبایل */}
@@ -340,7 +347,7 @@ export function AdActions({
           variant="outline"
           size="icon"
           className="h-12 w-12 rounded-xl border-orange-500 text-orange-500 bg-white hover:bg-orange-50 flex-shrink-0"
-          onClick={() => window.print()}
+          onClick={() => handlePrint()}
         >
           <Printer className="w-5 h-5" />
         </Button>

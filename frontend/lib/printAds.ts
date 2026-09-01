@@ -1,3 +1,4 @@
+// lib/printAds.ts — نسخه pdfmake با فونت پیش‌فرض
 
 import pdfMake from "pdfmake/build/pdfmake";
 
@@ -614,4 +615,4 @@ export async function printBulkAdsBrowser(ads: PrintAd[], options?: PrintOptions
   if (ads.length === 0) return;
   const docDefinition = await buildBulkAdsDocument(ads, options);
   pdfMake.createPdf(docDefinition).open();
-} 
+}
