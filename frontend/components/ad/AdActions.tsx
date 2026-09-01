@@ -1,4 +1,3 @@
-// frontend/components/ad/AdActions.tsx
 "use client";
 
 import { useState } from "react";
@@ -234,7 +233,7 @@ export function AdActions({
           </Button>
         )}
 
-        {/* پرینت آگهی (window.print) */}
+        {/* پرینت آگهی */}
         <Button
           variant="outline"
           className="w-full gap-2 rounded-xl h-11 text-xs font-bold"
@@ -267,7 +266,7 @@ export function AdActions({
         </div>
       </div>
 
-      {/* محتوای چاپ مخفی – فقط هنگام پرینت */}
+      {/* محتوای چاپ مخفی – فقط هنگام پرینت نمایش داده می‌شود */}
       <div
         className="print-only-container"
         style={{

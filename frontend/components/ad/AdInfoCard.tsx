@@ -1,11 +1,13 @@
-// frontend/components/ad/AdInfoCard.tsx
 "use client";
 
 import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   MapPin,
+  Bookmark,
+  Share2,
   FileText,
   Clock,
   Flame,
@@ -23,7 +25,7 @@ interface AdInfoCardProps {
   title: string;
   price: number;
   priceType?: string;
-  status?: string;
+  status: string;
   categoryName?: string;
   city: string;
   district?: string;
@@ -55,6 +57,7 @@ export function AdInfoCard({
   userRole,
   price,
   priceType = "fixed",
+  status,
   adType,
   categoryName,
   city,
@@ -101,7 +104,7 @@ export function AdInfoCard({
     if (!dateStr) return "لحظاتی پیش";
     try {
       const date = new Date(dateStr);
-      return date.toLocaleString("fa-IR", {
+      return date.toLocaleDateString("fa-IR", {
         hour: "2-digit",
         minute: "2-digit",
       });
@@ -127,7 +130,6 @@ export function AdInfoCard({
   };
 
   const priceDisplay = getPriceDisplay();
-
   // ─── استخراج هوشمند از additionalProperties ───
   const findValue = (keywords: string[]): string | null => {
     if (additionalProperties && additionalProperties.length > 0) {
@@ -157,18 +159,14 @@ export function AdInfoCard({
     }
     return null;
   };
-
-  const areaDisplay = area ? `${area.toLocaleString("fa-IR")} متر` : "—";
+ const areaDisplay = area ? `${area.toLocaleString("fa-IR")} متر` : "—";
   const roomsDisplay = rooms ? `${rooms.toLocaleString("fa-IR")} اتاق` : "—";
-
-  // استفاده از سال شمسی ثابت برای محاسبه سن بنا
-  const currentPersianYear = 1405; // می‌توانید با کتابخانه تاریخ دقیق کنید
+  const currentPersianYear = 1405;
   const ageDisplay = buildingAge
     ? `${buildingAge} سال`
     : yearBuilt
       ? `${currentPersianYear - yearBuilt} سال (ساخت ${yearBuilt})`
       : "—";
-
   const parkingDisplay = parkingCount
     ? `${parkingCount} خودرو`
     : amenities?.parking
@@ -190,7 +188,10 @@ export function AdInfoCard({
         <div className="space-y-2 flex-1">
           <div className="flex flex-wrap gap-2 items-center">
             {categoryName && (
-              <Badge variant="default" className="text-[10px] rounded-lg font-bold">
+              <Badge
+                variant="default"
+                className="text-[10px]  rounded-lg font-bold"
+              >
                 {categoryName}
               </Badge>
             )}
@@ -201,11 +202,9 @@ export function AdInfoCard({
               </Badge>
             )}
           </div>
-
           <h1 className="font-black text-lg md:text-xl text-foreground leading-8">
             {title}
           </h1>
-
           {userRole === "vip" && (
             <div className="mt-2 flex items-center gap-1.5">
               <Crown className="w-4 h-4 text-amber-500" />
@@ -214,7 +213,6 @@ export function AdInfoCard({
               </span>
             </div>
           )}
-
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground font-medium">
             <span className="flex items-center gap-1">
               <Clock className="w-3.5 h-3.5 text-primary" />
@@ -278,9 +276,15 @@ export function AdInfoCard({
       </div>
 
       {/* امکانات رفاهی */}
-      {(amenities?.parking || hasElevator || hasStorage || hasBalcony || hasPool) && (
+      {(amenities?.parking ||
+        hasElevator ||
+        hasStorage ||
+        hasBalcony ||
+        hasPool) && (
         <div className="space-y-2">
-          <h4 className="text-xs font-black text-foreground">امکانات رفاهی ملک</h4>
+          <h4 className="text-xs font-black text-foreground">
+            امکانات رفاهی ملک
+          </h4>
           <div className="flex flex-wrap gap-2">
             {amenities?.parking && (
               <Badge variant="outline" className="text-[11px] rounded-lg">
@@ -327,14 +331,18 @@ export function AdInfoCard({
       {/* مشخصات تکمیلی */}
       {additionalProperties && additionalProperties.length > 0 && (
         <div className="mt-4 bg-muted/10 border border-border/50 p-4 rounded-xl space-y-2">
-          <h4 className="font-black text-xs text-foreground mb-3">مشخصات تکمیلی آگهی</h4>
+          <h4 className="font-black text-xs text-foreground mb-3">
+            مشخصات تکمیلی آگهی
+          </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
             {additionalProperties.map((prop, idx) => (
               <div
                 key={idx}
                 className="flex justify-between items-center py-2 text-xs border-b border-border/30 last:border-0 sm:even:border-b-0"
               >
-                <span className="text-muted-foreground font-medium">{prop.name}</span>
+                <span className="text-muted-foreground font-medium">
+                  {prop.name}
+                </span>
                 <span className="font-bold text-foreground">{prop.value}</span>
               </div>
             ))}
