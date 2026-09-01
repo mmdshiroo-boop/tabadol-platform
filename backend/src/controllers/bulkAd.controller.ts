@@ -703,44 +703,22 @@ async function processBulkTask(taskId: any) {
     const BATCH_SIZE = 200;
     let adBatch: any[] = [];
     let auditLogBatch: any[] = [];
-
-    // تابع فلاش دسته‌ای که تعداد واقعی درج شده را برمی‌گرداند
-    const flushBatches = async (): Promise<number> => {
-      if (adBatch.length === 0) return 0;
-      let insertedCount = 0;
-      try {
-        const inserted = await Ad.insertMany(adBatch, { ordered: false });
-        insertedCount = inserted.length;
-        // به‌روزرسانی resourceId برای audit logs
-        auditLogBatch.forEach((log, idx) => {
-          if (inserted[idx]) log.resourceId = inserted[idx]._id;
-        });
-        // درج لاگ‌ها
+    const flushBatches = async () => {
+      if (adBatch.length > 0) {
+        try {
+          const inserted = await Ad.insertMany(adBatch, { ordered: false });
+          auditLogBatch.forEach((log, idx) => {
+            if (inserted[idx]) log.resourceId = inserted[idx]._id;
+          });
+        } catch (insertErr: any) {
+          console.error("Batch insert error:", insertErr);
+        }
         if (auditLogBatch.length > 0) {
           await AuditLog.insertMany(auditLogBatch, { ordered: false });
         }
-      } catch (insertErr: any) {
-        // اگر خطایی رخ دهد، ممکن است برخی اسناد درج شده باشند
-        if (insertErr.insertedDocs) {
-          insertedCount = insertErr.insertedDocs.length;
-          // ثبت خطا برای هر سند ناموفق (در صورت امکان)
-        }
-        console.error("❌ Batch insert error:", insertErr);
-        // ثبت خطا در errorLog
-        errorLog.push({
-          row: "batch",
-          index: 0,
-          type: "error",
-          message: `خطا در درج دسته‌ای: ${insertErr.message}`,
-        });
-        // افزایش errorCount به تعداد اسناد ناموفق
-        errorCount += adBatch.length - insertedCount;
-      } finally {
-        // پاکسازی آرایه‌ها
         adBatch = [];
         auditLogBatch = [];
       }
-      return insertedCount;
     };
 
     for (const entry of jsonFiles) {
@@ -806,11 +784,10 @@ async function processBulkTask(taskId: any) {
               createdAt: new Date(),
             });
             existingSourceIds.add(sourceId);
+            successCount++;
 
-            // اگر batch پر شد، flush کن و تعداد موفق را اضافه کن
             if (adBatch.length >= BATCH_SIZE) {
-              const insertedNow = await flushBatches();
-              successCount += insertedNow;
+              await flushBatches();
             }
           } catch (itemErr: any) {
             errorCount++;
@@ -826,10 +803,7 @@ async function processBulkTask(taskId: any) {
       }
     }
 
-    // فلاش باقی‌مانده
-    const remainingInserted = await flushBatches();
-    successCount += remainingInserted;
-
+    await flushBatches();
     fs.unlink(task.fileName, () => {});
 
     await BulkTask.findByIdAndUpdate(taskId, {
