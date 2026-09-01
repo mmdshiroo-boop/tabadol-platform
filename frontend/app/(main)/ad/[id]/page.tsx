@@ -1,3 +1,4 @@
+// app/(main)/ad/[id]/page.tsx
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -147,7 +148,10 @@ export default function AdDetailPage() {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6" dir="rtl">
+      <div
+        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6"
+        dir="rtl"
+      >
         <Skeleton className="h-5 w-60 rounded-full" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
@@ -179,177 +183,181 @@ export default function AdDetailPage() {
     typeof ad.latitude === "number" && typeof ad.longitude === "number";
 
   return (
-    <div className="w-full pb-28 md:pb-6 overflow-x-hidden" dir="rtl">
-      {/* اسلایدر موبایل */}
-      <div
-        className="relative w-full h-[300px] md:hidden cursor-pointer"
-        onClick={() => setModalOpen(true)}
-      >
-        {ad.images && ad.images.length > 0 ? (
-          <img
-            src={getImageUrl(ad.images[imgIdx] || "/placeholder.jpg")}
-            alt={ad.title}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full bg-muted flex items-center justify-center">
-            تصویر موجود نیست
-          </div>
-        )}
-
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleBack();
-          }}
-          className="absolute top-4 right-4 bg-white/90 p-2 rounded-xl text-gray-700 shadow-sm backdrop-blur-sm z-10"
+    <div className="flex flex-col items-center w-full min-h-screen bg-background">
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-28 md:pb-8 overflow-x-hidden">
+        {/* اسلایدر موبایل */}
+        <div
+          className="relative w-full h-[300px] md:hidden cursor-pointer rounded-2xl overflow-hidden mt-2"
+          onClick={() => setModalOpen(true)}
         >
-          <ChevronRight size={24} />
-        </button>
-
-        <div className="absolute top-4 left-4 flex items-center bg-white/90 rounded-xl shadow-sm text-gray-700 backdrop-blur-sm z-10">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleSaveToggle();
-            }}
-            className={`p-2 transition-colors rounded-r-xl hover:bg-gray-200`}
-          >
-            <Bookmark
-              className={`w-4 h-4 ${isSaved ? "fill-primary text-primary" : "text-muted-foreground"}`}
-            />
-          </button>
-          <div className="w-[1px] h-5 bg-gray-300"></div>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleShare();
-            }}
-            className="p-2 hover:bg-gray-200 transition-colors"
-          >
-            <Share2 size={20} />
-          </button>
-          <div className="w-[1px] h-5 bg-gray-300"></div>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleReport();
-            }}
-            className="p-2 hover:bg-gray-200 rounded-l-xl transition-colors"
-          >
-            <AlertOctagon size={20} />
-          </button>
-        </div>
-
-        {ad.images && ad.images.length > 1 && (
-          <>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                prevSlide();
-              }}
-              className="absolute top-1/2 right-2 -translate-y-1/2 bg-white/50 p-1.5 rounded-full text-black z-10"
-            >
-              <ChevronRight size={20} />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                nextSlide();
-              }}
-              className="absolute top-1/2 left-2 -translate-y-1/2 bg-white/50 p-1.5 rounded-full text-black z-10"
-            >
-              <ChevronLeft size={20} />
-            </button>
-            <div className="absolute bottom-3 left-0 right-0 flex justify-center items-center gap-2 z-10">
-              {ad.images.map((_, idx) => (
-                <div
-                  key={idx}
-                  className={`h-2 w-2 rounded-full transition-all ${idx === imgIdx ? "bg-orange-500 scale-110" : "bg-black/50"}`}
-                />
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-3 flex justify-center">
-        <AdBreadcrumb
-          cityName={ad.city}
-          citySlug={ad.city}
-          categories={ad.category ? [ad.category] : []}
-          adTitle={ad.title}
-        />
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-7 mt-4">
-        <div className="lg:col-span-2 space-y-5">
-          <div className="hidden md:block">
-            <AdImageGallery
-              images={ad.images}
-              isModalOpen={modalOpen}
-              setIsModalOpen={setModalOpen}
-              currentIndex={imgIdx}
-              setCurrentIndex={setImgIdx}
-            />
-          </div>
-
-          <AdInfoCard
-            adId={ad._id}
-            title={ad.title}
-            price={ad.price}
-            priceType={ad.priceType}
-            status={ad.status}
-            adType={ad.adType}
-            categoryName={ad.category?.name}
-            city={ad.city}
-            district={ad.district}
-            createdAt={ad.createdAt}
-            description={ad.description}
-            isUrgent={ad.isUrgent}
-            area={ad.area}
-            rooms={ad.rooms}
-            buildingAge={ad.buildingAge}
-            yearBuilt={ad.yearBuilt}
-            parkingCount={ad.parkingCount}
-            amenities={ad.amenities}
-            additionalProperties={ad.additionalProperties}
-            views={ad.views}
-            userRole={ad.userId?.role}
-          />
-        </div>
-
-        <aside className="lg:sticky lg:top-20 lg:self-start space-y-5">
-          <AdActions
-            sellerName={sellerName}
-            sellerPhone={ad.contactPhone}
-            isVerified={ad.userId?.isVerified}
-            adPrice={ad.price}
-            adArea={ad.area}
-            adTitle={ad.title}
-            sellerAvatar={ad.userId?.avatar}
-            adId={ad._id}
-            sellerUserId={ad.userId?._id}
-            sourceUrl={ad.sourceUrl}
-            adData={ad}
-          />
-
-          {hasCoordinates ? (
-            <AdMaps
-              city={ad.city}
-              district={ad.district}
-              address={ad.address}
-              latitude={ad.latitude as number}
-              longitude={ad.longitude as number}
+          {ad.images && ad.images.length > 0 ? (
+            <img
+              src={getImageUrl(ad.images[imgIdx] || "/placeholder.jpg")}
+              alt={ad.title}
+              className="w-full h-full object-cover"
             />
           ) : (
-            <div className="bg-card rounded-2xl border border-border p-5 text-center shadow-sm">
-              <p className="text-sm text-muted-foreground font-medium">
-                موقعیت مکانی برای این آگهی ثبت نشده است
-              </p>
+            <div className="w-full h-full bg-muted flex items-center justify-center">
+              تصویر موجود نیست
             </div>
           )}
-        </aside>
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleBack();
+            }}
+            className="absolute top-4 right-4 bg-white/90 p-2 rounded-xl text-gray-700 shadow-sm backdrop-blur-sm z-10"
+          >
+            <ChevronRight size={24} />
+          </button>
+
+          <div className="absolute top-4 left-4 flex items-center bg-white/90 rounded-xl shadow-sm text-gray-700 backdrop-blur-sm z-10">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSaveToggle();
+              }}
+              className={`p-2 transition-colors rounded-r-xl hover:bg-gray-200`}
+            >
+              <Bookmark
+                className={`w-4 h-4 ${isSaved ? "fill-primary text-primary" : "text-muted-foreground"}`}
+              />
+            </button>
+            <div className="w-[1px] h-5 bg-gray-300"></div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleShare();
+              }}
+              className="p-2 hover:bg-gray-200 transition-colors"
+            >
+              <Share2 size={20} />
+            </button>
+            <div className="w-[1px] h-5 bg-gray-300"></div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleReport();
+              }}
+              className="p-2 hover:bg-gray-200 rounded-l-xl transition-colors"
+            >
+              <AlertOctagon size={20} />
+            </button>
+          </div>
+
+          {ad.images && ad.images.length > 1 && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  prevSlide();
+                }}
+                className="absolute top-1/2 right-2 -translate-y-1/2 bg-white/50 p-1.5 rounded-full text-black z-10"
+              >
+                <ChevronRight size={20} />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  nextSlide();
+                }}
+                className="absolute top-1/2 left-2 -translate-y-1/2 bg-white/50 p-1.5 rounded-full text-black z-10"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <div className="absolute bottom-3 left-0 right-0 flex justify-center items-center gap-2 z-10">
+                {ad.images.map((_, idx) => (
+                  <div
+                    key={idx}
+                    className={`h-2 w-2 rounded-full transition-all ${idx === imgIdx ? "bg-orange-500 scale-110" : "bg-black/50"}`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* breadcrumb */}
+        <div className="mt-3 flex justify-center">
+          <AdBreadcrumb
+            cityName={ad.city}
+            citySlug={ad.city}
+            categories={ad.category ? [ad.category] : []}
+            adTitle={ad.title}
+          />
+        </div>
+
+        {/* grid content */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-7 mt-4">
+          <div className="lg:col-span-2 space-y-5 min-w-0">
+            <div className="hidden md:block">
+              <AdImageGallery
+                images={ad.images}
+                isModalOpen={modalOpen}
+                setIsModalOpen={setModalOpen}
+                currentIndex={imgIdx}
+                setCurrentIndex={setImgIdx}
+              />
+            </div>
+
+            <AdInfoCard
+              adId={ad._id}
+              title={ad.title}
+              price={ad.price}
+              priceType={ad.priceType}
+              status={ad.status}
+              adType={ad.adType}
+              categoryName={ad.category?.name}
+              city={ad.city}
+              district={ad.district}
+              createdAt={ad.createdAt}
+              description={ad.description}
+              isUrgent={ad.isUrgent}
+              area={ad.area}
+              rooms={ad.rooms}
+              buildingAge={ad.buildingAge}
+              yearBuilt={ad.yearBuilt}
+              parkingCount={ad.parkingCount}
+              amenities={ad.amenities}
+              additionalProperties={ad.additionalProperties}
+              views={ad.views}
+              userRole={ad.userId?.role}
+            />
+          </div>
+
+          <aside className="lg:sticky lg:top-20 lg:self-start space-y-5 min-w-0">
+            <AdActions
+              sellerName={sellerName}
+              sellerPhone={ad.contactPhone}
+              isVerified={ad.userId?.isVerified}
+              adPrice={ad.price}
+              adArea={ad.area}
+              adTitle={ad.title}
+              sellerAvatar={ad.userId?.avatar}
+              adId={ad._id}
+              sellerUserId={ad.userId?._id}
+              sourceUrl={ad.sourceUrl}
+              adData={ad}
+            />
+
+            {hasCoordinates ? (
+              <AdMaps
+                city={ad.city}
+                district={ad.district}
+                address={ad.address}
+                latitude={ad.latitude as number}
+                longitude={ad.longitude as number}
+              />
+            ) : (
+              <div className="bg-card rounded-2xl border border-border p-5 text-center shadow-sm">
+                <p className="text-sm text-muted-foreground font-medium">
+                  موقعیت مکانی برای این آگهی ثبت نشده است
+                </p>
+              </div>
+            )}
+          </aside>
+        </div>
       </div>
     </div>
   );
